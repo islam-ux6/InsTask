@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Task(models.Model):
@@ -31,7 +32,16 @@ class Task(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время завершения')
 
     revision_count = models.IntegerField(default=0, verbose_name='Количество доработок')
-    quality_score = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='Оценка качества (1-5)')
+
+    quality_score = models.PositiveSmallIntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Оценка качества (1-5)',
+        validators=[
+            MinValueValidator(1, message='Минимальная оценка — 1'),
+            MaxValueValidator(5, message='Максимальная оценка — 5')
+        ]
+    )
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"

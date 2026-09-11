@@ -26,7 +26,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         if user.role == user.Role.MANAGER and user.department:
             return base_qs.filter(
-                Q(creator__department=user.department | Q(assignee__department=user.department))
+                Q(creator__department=user.department) | Q(assignee__department=user.department)
             )
 
         return base_qs.filter(Q(creator=user) | Q(assignee=user))
