@@ -24,7 +24,19 @@ class Task(models.Model):
     )
 
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_tasks', verbose_name='Постановщик')
-    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='assigned_tasks', verbose_name='Исполнитель')
+    assignees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='assigned_tasks',
+        blank=True,
+        verbose_name='Исполнители (Преподаватели)'
+    )
+
+    target_departments = models.ManyToManyField(
+        'departments.Department',
+        related_name='department_tasks',
+        blank=True,
+        verbose_name='Целевые кафедры (Общее задание)'
+    )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATED, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -50,8 +62,10 @@ class Task(models.Model):
 class TaskReport(models.Model):
     """Модель для отправки отчета о выполнении задачи"""
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='reports', verbose_name='Задача')
+    # НОВОЕ ПОЛЕ: Кто именно из преподавателей отправил отчет
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submitted_reports', verbose_name='Автор отчета', null=True)
+    
     comment = models.TextField(verbose_name='Комментарий исполнителя')
-    # Для файлов потребуется настроить MEDIA_ROOT в settings.py
     attached_file = models.FileField(upload_to='task_reports/', null=True, blank=True, verbose_name='Прикрепленный файл')
     submitted_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата отправки')
 

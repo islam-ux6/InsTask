@@ -7,7 +7,6 @@ from accounts.views import UserViewSet
 from departments.views import DepartmentViewSet
 from tasks.views import TaskViewSet, TaskReportViewSet
 
-# Создаем роутер и регистрируем в нем ViewSet-ы
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'departments', DepartmentViewSet, basename='department')

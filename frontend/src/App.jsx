@@ -1,14 +1,25 @@
-export default function App() {
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+
+function App() {
+  // Простая проверка: если есть токен, считаем пользователя авторизованным
+  const isAuthenticated = !!localStorage.getItem('access');
+
   return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="p-8 bg-white rounded-xl shadow-lg text-center">
-        <h1 className="text-4xl font-bold text-blue-600 mb-4">
-          Система Института 🎓
-        </h1>
-        <p className="text-gray-600">
-          Tailwind CSS успешно подключен и работает!
-        </p>
-      </div>
-    </div>
-  )
+    <BrowserRouter>
+      <Routes>
+        {/* Страница логина */}
+        <Route path="/login" element={<Login />} />
+        
+        {/* Главная страница (защищена от неавторизованных) */}
+        <Route 
+          path="/" 
+          element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />} 
+        />
+      </Routes>
+    </BrowserRouter>
+  );
 }
+
+export default App;

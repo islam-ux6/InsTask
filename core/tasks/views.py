@@ -1,35 +1,50 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action 
-from rest_framework.response import Response 
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
 from django.utils import timezone
+
 from .models import Task, TaskReport
 from .serializers import TaskSerializer, TaskReportSerializer
-from .permissions import IsTaskParticipant, IsAssigneeForAccept
-from django.db.models import Q
-
+from .permissions import IsTaskParticipant, IsAssigneeForAccept 
 
 class TaskViewSet(viewsets.ModelViewSet):
     """
     Основной API для работы с задачами (CRUD).
-    prefetch_related загрузит все отчеты одним SQL-запросом, а не по одному на каждую задачу.
+    Оптимизировано для работы с множественными исполнителями (assignees) 
+    и целевыми кафедрами (target_departments).
     """
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated, IsTaskParticipant]
+    permission_classes = [IsAuthenticated, IsTaskParticipant] # Добавь IsTaskParticipant, когда обновим его
 
     def get_queryset(self):
         user = self.request.user
-        base_qs = Task.objects.all().select_related('creator', 'assignee').prefetch_related('reports')
+        
+        # ОПТИМИЗАЦИЯ: creator остался в select_related (ForeignKey)
+        # assignees и target_departments ушли в prefetch_related (ManyToMany)
+        base_qs = Task.objects.all().select_related('creator').prefetch_related(
+            'assignees', 'target_departments', 'reports'
+        )
 
-        if user.role == user.Role.RECTORATE:
-            return base_qs
+        if user.is_rectorate:
+            # Ректорат видит всё
+            return base_qs.distinct()
 
-        if user.role == user.Role.MANAGER and user.department:
+        if user.is_manager:
+            # Завкафедры видит созданное им, назначенное ему, или связанное с его кафедрой
             return base_qs.filter(
-                Q(creator__department=user.department) | Q(assignee__department=user.department)
-            )
+                Q(creator=user) |
+                Q(assignees=user) |
+                Q(target_departments=user.department) |
+                Q(assignees__department=user.department)
+            ).distinct()
 
-        return base_qs.filter(Q(creator=user) | Q(assignee=user))
+        # Обычный преподаватель
+        return base_qs.filter(
+            Q(assignees=user) | 
+            Q(target_departments=user.department)
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)
@@ -40,38 +55,35 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         updated_task = serializer.save()
 
+        # Автоматический счетчик доработок
         if old_status != Task.Status.REVISION and updated_task.status == Task.Status.REVISION:
             updated_task.revision_count += 1
             updated_task.save(update_fields=['revision_count'])
 
+        # Автоматическая фиксация времени выполнения
         if old_status != Task.Status.COMPLETED and updated_task.status == Task.Status.COMPLETED:
             updated_task.completed_at = timezone.now()
             updated_task.save(update_fields=['completed_at'])
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAssigneeForAccept])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAssigneeForAccept]) # Добавь IsAssigneeForAccept
     def accept(self, request, pk=None):
         """
         Кастомный эндпоинт для принятия задачи в работу.
         URL: /api/tasks/{id}/accept/
         """
-        # Получаем текущую задачу по ID (pk)
         task = self.get_object()
 
-        # Проверяем, что задача действительно находится в статусе "Создана"
         if task.status != Task.Status.CREATED:
             return Response(
                 {"error": "Вы можете принять в работу только новые задачи (статус 'Создана')."},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # Меняем статус и сохраняем
         task.status = Task.Status.IN_PROGRESS
         task.save(update_fields=['status'])
         
-        # Возвращаем обновленные данные задачи
         serializer = self.get_serializer(task)
         return Response(serializer.data)
-
 
 
 class TaskReportViewSet(viewsets.ModelViewSet):
