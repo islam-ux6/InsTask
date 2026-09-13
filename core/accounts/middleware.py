@@ -1,5 +1,5 @@
 from django.utils import timezone
-from datetime import time
+from datetime import datetime, time, timedelta
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import DailyAttendance
 
@@ -23,27 +23,37 @@ class TimeTrackingMiddleware:
         return self.get_response(request)
 
     def track_attendance(self, user):
-        # Получаем текущую локальную дату и время
+        # Если сотрудник не "Работает", игнорируем
+        if getattr(user, 'work_status', 'working') != 'working':
+            return
+
         now = timezone.localtime()
         today = now.date()
         current_time = now.time()
 
-        # Проверяем, есть ли уже запись за сегодня. Если нет - создаем!
         if not DailyAttendance.objects.filter(user=user, date=today).exists():
-            
-            # Достаем время начала работы из профиля (например из "08:00-16:30" берем "08:00")
-            start_str = user.working_hours.split('-')[0]
-            expected_hour, expected_minute = map(int, start_str.split(':'))
-            expected_time = time(expected_hour, expected_minute)
+            try:
+                # Достаем время начала работы (например, "08:30")
+                start_str = user.working_hours.split('-')[0].strip()
+                expected_hour, expected_minute = map(int, start_str.split(':'))
+                
+                # Чтобы безопасно прибавить 10 минут, нам нужно превратить время в полноценный datetime
+                expected_datetime = timezone.make_aware(
+                    datetime.combine(today, time(expected_hour, expected_minute))
+                )
+                
+                # ДОБАВЛЯЕМ 10 МИНУТ ПОБЛАЖКИ
+                allowed_datetime = expected_datetime + timedelta(minutes=10)
+                
+                # Сравниваем текущее время с РАЗРЕШЕННЫМ временем (08:40)
+                is_late = now > allowed_datetime
+                status = DailyAttendance.Status.LATE if is_late else DailyAttendance.Status.ON_TIME
 
-            # Проверяем на опоздание
-            is_late = current_time > expected_time
-            status = DailyAttendance.Status.LATE if is_late else DailyAttendance.Status.ON_TIME
-
-            # Записываем в базу
-            DailyAttendance.objects.create(
-                user=user,
-                date=today,
-                arrival_time=current_time,
-                status=status
-            )
+                DailyAttendance.objects.create(
+                    user=user,
+                    date=today,
+                    arrival_time=current_time,
+                    status=status
+                )
+            except Exception as e:
+                print(f"Ошибка учета времени для {user.username}: {e}")

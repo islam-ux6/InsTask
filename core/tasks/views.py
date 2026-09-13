@@ -16,7 +16,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     и целевыми кафедрами (target_departments).
     """
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated, IsTaskParticipant] # Добавь IsTaskParticipant, когда обновим его
+    permission_classes = [IsAuthenticated, IsTaskParticipant] 
 
     def get_queryset(self):
         user = self.request.user
@@ -27,18 +27,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             'assignees', 'target_departments', 'reports'
         )
 
-        if user.is_rectorate:
-            # Ректорат видит всё
+        if user.is_rectorate or user.is_manager:
             return base_qs.distinct()
-
-        if user.is_manager:
-            # Завкафедры видит созданное им, назначенное ему, или связанное с его кафедрой
-            return base_qs.filter(
-                Q(creator=user) |
-                Q(assignees=user) |
-                Q(target_departments=user.department) |
-                Q(assignees__department=user.department)
-            ).distinct()
 
         # Обычный преподаватель
         return base_qs.filter(

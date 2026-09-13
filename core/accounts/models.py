@@ -28,10 +28,23 @@ class User(AbstractUser):
         SHIFT_1 = '08:00-16:30', '8:00-16:30'
         SHIFT_2 = '08:00-15:00', '8:00-15:00'
 
+    class WorkStatus(models.TextChoices):
+        WORKING = 'working', 'Работает'
+        VACATION = 'vacation', 'В отпуске'
+        SICK = 'sick', 'На больничном'
+        TRIP = 'trip', 'В командировке'
+
+
     teaching_status = models.CharField(max_length=20, choices=TeachingStatus.choices, null=True, blank=True, verbose_name='Преподавательский статус')
     academic_degree = models.CharField(max_length=20, choices=AcademicDegree.choices, default=AcademicDegree.NONE, verbose_name='Ученая степень')
     position = models.CharField(max_length=20, choices=Position.choices, default=Position.NONE, verbose_name='Должность')
     working_hours = models.CharField(max_length=20, choices=WorkingHours.choices, default=WorkingHours.SHIFT_1, verbose_name='Рабочие часы')
+    work_status = models.CharField(
+        max_length=20, 
+        choices=WorkStatus.choices, 
+        default=WorkStatus.WORKING, 
+        verbose_name='Статус присутствия'
+    )
     
     department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
     phone = models.CharField(max_length=20, blank=True)
