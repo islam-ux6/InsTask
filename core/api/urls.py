@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.views import UserViewSet
 from departments.views import DepartmentViewSet
 from tasks.views import TaskViewSet, TaskReportViewSet
+from analytics.views import DashboardAnalyticsView
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -19,4 +20,6 @@ urlpatterns = [
 
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    path('analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard-analytics'),
 ]

@@ -71,3 +71,21 @@ class TaskReport(models.Model):
 
     def __str__(self):
         return f"Отчет по задаче: {self.task.title}"
+
+# Добавь этот класс в tasks/models.py
+class TaskStatusLog(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='status_logs')
+    status = models.CharField(max_length=20, choices=Task.Status.choices, verbose_name='Статус')
+    entered_at = models.DateTimeField(auto_now_add=True, verbose_name='Время перехода в статус')
+    exited_at = models.DateTimeField(null=True, blank=True, verbose_name='Время выхода из статуса')
+    
+    @property
+    def hours_spent(self):
+        """Вычисляет, сколько часов задача провела в этом статусе"""
+        if self.exited_at:
+            delta = self.exited_at - self.entered_at
+            return round(delta.total_seconds() / 3600, 1) # Переводим секунды в часы
+        return 0
+
+    def __str__(self):
+        return f"{self.task.title} - {self.get_status_display()}"

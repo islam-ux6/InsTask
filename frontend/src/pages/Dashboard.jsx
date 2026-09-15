@@ -1,28 +1,49 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer,
+  Line, ComposedChart,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
+} from 'recharts';
 
 export default function Dashboard() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [allTasks, setAllTasks] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [myActiveTasks, setMyActiveTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Состояния для интерактивных графиков
+  const [chartTarget, setChartTarget] = useState('all_emps'); 
+  // Возможные стейты: all_depts, all_emps, all_emps_in_dept, single, bottlenecks_emps, bottlenecks_depts
+  const [selectedId, setSelectedId] = useState('');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // Грузим сразу всё, чтобы посчитать аналитику
-        const [meRes, tasksRes, usersRes] = await Promise.all([
+        const [meRes, tasksRes, analyticsRes] = await Promise.all([
           api.get('/users/me/'),
           api.get('/tasks/'),
-          api.get('/users/').catch(() => ({ data: [] })) // Если нет прав, вернет пустой массив
+          api.get('/analytics/dashboard/').catch(() => ({ data: null }))
         ]);
         
-        setCurrentUser(meRes.data);
-        setAllTasks(tasksRes.data);
-        setAllUsers(usersRes.data);
+        const user = meRes.data;
+        setCurrentUser(user);
+        
+        const data = analyticsRes.data;
+        setAnalytics(data);
+        
+        if (data?.scope === 'institute') {
+          setChartTarget('all_depts');
+        }
+
+        const myTasks = tasksRes.data.filter(t => 
+          t.assignees.some(a => a.id === user.id) && t.status !== 'completed'
+        );
+        setMyActiveTasks(myTasks);
+
       } catch (error) {
-        console.error("Ошибка загрузки дашборда:", error);
+        console.error("Ошибка загрузки:", error);
       } finally {
         setLoading(false);
       }
@@ -30,237 +51,324 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
-  if (loading) {
-    return <div className="min-h-[calc(100vh-6rem)] flex items-center justify-center text-gray-500">Сбор аналитики...</div>;
-  }
-
+  if (loading) return <div className="min-h-[calc(100vh-6rem)] flex items-center justify-center text-gray-500">Загрузка аналитики...</div>;
   if (!currentUser) return null;
 
-  // === 1. ОПРЕДЕЛЯЕМ ОБЛАСТЬ ВИДИМОСТИ ДАННЫХ ===
-  const isRectorate = currentUser.is_rectorate;
-  const isManager = currentUser.is_manager;
-  const isAdmin = isRectorate || isManager;
+  const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
 
-  // Отбираем пользователей для статистики (Ректор - всех, Зав - свою кафедру, Препод - никого)
-  const targetUsers = isRectorate 
-    ? allUsers 
-    : isManager 
-      ? allUsers.filter(u => u.department === currentUser.department) 
-      : [];
-
-  // Отбираем МОИ ЛИЧНЫЕ задачи (где я исполнитель) для виджета
-  const myTasks = allTasks.filter(t => t.assignees.some(a => a.id === currentUser.id));
-  const myActiveTasks = myTasks.filter(t => t.status !== 'completed');
-
-  // === 2. СЧИТАЕМ СТАТИСТИКУ (Для управленцев) ===
-  let totalStaff = 0, onWorkToday = 0, onVacation = 0, onTime = 0, late = 0;
-  let totalTasks = 0, completedTasks = 0, completionRate = 0;
-
-  if (isAdmin) {
-    totalStaff = targetUsers.length;
+  // === ЛОГИКА ОТОБРАЖЕНИЯ ГРАФИКОВ ===
+  const renderProductivityChart = () => {
     
-    // Посещаемость за СЕГОДНЯ
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    
-    targetUsers.forEach(u => {
-      if (u.work_status !== 'working') {
-        onVacation += 1;
-      } else {
-        onWorkToday += 1;
-        // Смотрим словарь посещаемости из бэкенда
-        if (u.attendance_history && u.attendance_history[dateStr]) {
-          const status = u.attendance_history[dateStr].toLowerCase();
-          if (status.includes('on_time') || status.includes('ontime')) onTime += 1;
-          if (status.includes('late')) late += 1;
-        }
+    // 1. СРАВНЕНИЕ ВСЕХ КАФЕДР
+    if (chartTarget === 'all_depts') {
+      return (
+        <ResponsiveContainer width="100%" height={350}>
+          <ComposedChart data={analytics.departments} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
+            <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} domain={[0, 100]} />
+            <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8b5cf6' }} domain={[0, 5]} />
+            <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+            <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
+            <Bar yAxisId="left" dataKey="completion_rate" name="Выполнено в срок (%)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50} />
+            <Line yAxisId="right" type="monotone" dataKey="quality" name="Среднее качество (1-5)" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    // 2. СРАВНЕНИЕ СОТРУДНИКОВ
+    if (chartTarget === 'all_emps' || chartTarget === 'all_emps_in_dept') {
+      let dataToRender = analytics.employees;
+      if (analytics.scope === 'institute' && selectedId && chartTarget === 'all_emps_in_dept') {
+        dataToRender = analytics.employees.filter(e => e.department_id === parseInt(selectedId));
       }
-    });
 
-    // Статистика по задачам (Ректор - все задачи, Зав - задачи своей кафедры)
-    const targetTasks = isRectorate 
-      ? allTasks 
-      : allTasks.filter(t => t.target_departments.some(d => d.id === currentUser.department) || t.creator.id === currentUser.id);
-    
-    totalTasks = targetTasks.length;
-    completedTasks = targetTasks.filter(t => t.status === 'completed').length;
-    completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  }
+      return (
+        <ResponsiveContainer width="100%" height={350}>
+          <ComposedChart data={dataToRender} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} interval={0} angle={-30} textAnchor="end" height={60} />
+            <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} domain={[0, 100]} />
+            <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8b5cf6' }} domain={[0, 5]} />
+            <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+            <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+            <Bar yAxisId="left" dataKey="completion_rate" name="Выполнение задач (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Line yAxisId="right" type="monotone" dataKey="quality" name="Качество (1-5)" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    // 3. АНАЛИЗ ЗАДЕРЖЕК (БУТЫЛОЧНЫЕ ГОРЛЫШКИ)
+    if (chartTarget === 'bottlenecks_emps' || chartTarget === 'bottlenecks_depts') {
+      const isDept = chartTarget === 'bottlenecks_depts';
+      const sourceData = isDept ? analytics.departments : analytics.employees;
+      
+      const chartData = sourceData.map(item => ({
+        name: item.name,
+        in_progress: item.cycle_time?.in_progress || 0,
+        on_review: item.cycle_time?.on_review || 0,
+        revision: item.cycle_time?.revision || 0
+      }));
+
+      return (
+        <div className="flex flex-col h-full">
+          <div className="mb-4 text-center">
+            <h4 className="font-bold text-gray-700">Где застревают задачи?</h4>
+            <p className="text-xs text-gray-500">Среднее время нахождения в статусах (в часах)</p>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} interval={0} angle={isDept ? 0 : -30} textAnchor={isDept ? "middle" : "end"} height={60} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
+              <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+              <Bar dataKey="in_progress" name="В работе (часы)" stackId="a" fill="#3b82f6" maxBarSize={40} />
+              <Bar dataKey="on_review" name="На проверке (часы)" stackId="a" fill="#f59e0b" maxBarSize={40} />
+              <Bar dataKey="revision" name="На доработке (часы)" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
+    // 4. КОНКРЕТНАЯ СУЩНОСТЬ (Воронка + Радар)
+    if (chartTarget === 'single') {
+      let entity = analytics.employees.find(e => e.id === parseInt(selectedId));
+      if (!entity) return <div className="text-center text-gray-400 mt-20">Выберите сотрудника для анализа</div>;
+
+      const funnelData = [
+        { name: 'Созданы', value: entity.statuses.created, fill: '#9ca3af' },
+        { name: 'В работе', value: entity.statuses.in_progress, fill: '#3b82f6' },
+        { name: 'Доработка', value: entity.statuses.revision, fill: '#ef4444' },
+        { name: 'На проверке', value: entity.statuses.on_review, fill: '#f59e0b' },
+        { name: 'Завершено', value: entity.statuses.completed, fill: '#10b981' }
+      ];
+
+      const radarData = [
+        { subject: 'Качество', A: entity.radar?.quality || 0, fullMark: 100 },
+        { subject: 'Дисциплина', A: entity.radar?.discipline || 0, fullMark: 100 },
+        { subject: 'Автономность', A: entity.radar?.autonomy || 0, fullMark: 100 },
+        { subject: 'Скорость', A: entity.radar?.speed || 0, fullMark: 100 },
+        { subject: 'Объем', A: entity.radar?.volume || 0, fullMark: 100 },
+      ];
+
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-xl">
+            <div>
+              <h4 className="font-bold text-blue-900 text-lg">{entity.name}</h4>
+              <p className="text-sm text-blue-700 mt-1">Детальный профиль продуктивности (Индекс: 0-100%)</p>
+            </div>
+            <div className="text-right">
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-lg font-bold">★ {entity.quality} / 5.0</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-[300px]">
+            <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col justify-center">
+              <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center mb-2">Воронка задач</h5>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#555', fontWeight: 'bold' }} width={80} />
+                  <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px' }} />
+                  <Bar dataKey="value" name="Задач" radius={[0, 4, 4, 0]} barSize={20} label={{ position: 'right', fill: '#888' }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-4 shadow-sm flex flex-col justify-center">
+              <h5 className="text-xs font-bold text-indigo-400 uppercase tracking-wider text-center mb-2">Комплексный профиль</h5>
+              <ResponsiveContainer width="100%" height={250}>
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <PolarGrid stroke="#c7d2fe" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#4f46e5', fontSize: 11, fontWeight: 'bold' }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Рейтинг (%)" dataKey="A" stroke="#4f46e5" strokeWidth={2} fill="#6366f1" fillOpacity={0.5} />
+                  <ChartTooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto pb-10 space-y-6">
       
-      {/* ШАПКА ДАШБОРДА */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">
             С возвращением, {currentUser.first_name || currentUser.username}!
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            {currentUser.position_display !== 'Нет административной должности' 
-              ? currentUser.position_display 
-              : currentUser.teaching_status_display}
-            {currentUser.department_name && ` | ${currentUser.department_name}`}
+            Панель управления {analytics?.scope === 'institute' ? 'институтом' : 'кафедрой'}
           </p>
-        </div>
-        
-        <div className="flex gap-3">
-          <Link to="/tasks" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition shadow-sm">
-            Мои задачи {myActiveTasks.length > 0 && <span className="bg-white text-blue-600 px-2 py-0.5 rounded-full text-xs ml-2">{myActiveTasks.length}</span>}
-          </Link>
         </div>
       </div>
 
-      {/* АНАЛИТИКА (ТОЛЬКО ДЛЯ РЕКТОРА И ЗАВКАФЕДРЫ) */}
-      {isAdmin && (
+      {isAdmin && analytics ? (
         <>
-          <h2 className="text-xl font-bold text-gray-800 mt-8 mb-4">
-            {isRectorate ? 'Сводка по институту' : 'Сводка по кафедре'}
-          </h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            {/* Карточка: Штат */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xl">👥</div>
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Сотрудники</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{totalStaff}</p>
-                <p className="text-sm text-gray-500 mt-1">В отпуске / БС: {onVacation}</p>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <p className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Качество работ</p>
+              <p className="text-4xl font-black text-blue-600">{analytics.kpi.avg_quality} <span className="text-lg text-gray-400">/ 5.0</span></p>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <p className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Выполнение в срок</p>
+              <p className="text-4xl font-black text-green-600">{analytics.kpi.completion_rate}%</p>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <p className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Опоздания (сегодня)</p>
+              <p className="text-4xl font-black text-yellow-500">{analytics.kpi.late} <span className="text-lg text-gray-400">чел.</span></p>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <p className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Штат онлайн</p>
+              <p className="text-4xl font-black text-purple-600">{analytics.kpi.on_time} <span className="text-lg text-gray-400">/ {analytics.kpi.total_staff}</span></p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-gray-100 pb-4">
+              <h3 className="font-bold text-gray-800 text-xl">Центр продуктивности</h3>
+              
+              <div className="flex flex-wrap gap-2">
+                {analytics.scope === 'institute' && (
+                  <>
+                    <button 
+                      onClick={() => { setChartTarget('all_depts'); setSelectedId(''); }}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition ${chartTarget === 'all_depts' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      Сравнение кафедр
+                    </button>
+                    {/* НОВАЯ КНОПКА ДЛЯ АНАЛИЗА ЗАДЕРЖЕК ПО КАФЕДРАМ */}
+                    <button 
+                      onClick={() => { setChartTarget('bottlenecks_depts'); setSelectedId(''); }}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${chartTarget === 'bottlenecks_depts' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                    >
+                      ⏳ Задержки (Кафедры)
+                    </button>
+                  </>
+                )}
+                
+                <button 
+                  onClick={() => { setChartTarget('all_emps'); setSelectedId(''); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition ${chartTarget === 'all_emps' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  {analytics.scope === 'institute' ? 'Все сотрудники' : 'Сравнение сотрудников'}
+                </button>
+
+                {/* НОВАЯ КНОПКА ДЛЯ АНАЛИЗА ЗАДЕРЖЕК ПО СОТРУДНИКАМ */}
+                <button 
+                  onClick={() => { setChartTarget('bottlenecks_emps'); setSelectedId(''); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${chartTarget === 'bottlenecks_emps' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                >
+                  ⏳ Задержки (Сотрудники)
+                </button>
+
+                {analytics.scope === 'institute' && (
+                  <select 
+                    className={`px-4 py-2 rounded-lg text-sm font-bold outline-none cursor-pointer border ${chartTarget === 'all_emps_in_dept' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
+                    value={chartTarget === 'all_emps_in_dept' ? selectedId : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setSelectedId(e.target.value);
+                        setChartTarget('all_emps_in_dept');
+                      }
+                    }}
+                  >
+                    <option value="">Сотрудники кафедры...</option>
+                    {analytics.departments.map(d => (
+                      <option key={`dept-${d.id}`} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <select 
+                  className={`px-4 py-2 rounded-lg text-sm font-bold outline-none cursor-pointer border ${chartTarget === 'single' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
+                  value={chartTarget === 'single' ? selectedId : ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedId(e.target.value);
+                      setChartTarget('single');
+                    }
+                  }}
+                >
+                  <option value="">Детально по сотруднику...</option>
+                  {analytics.employees.map(e => (
+                    <option key={`emp-${e.id}`} value={e.id}>{e.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Карточка: Дисциплина (Сегодня) */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center text-xl">⏱️</div>
-                <span className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full">Дисциплина сегодня</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{onTime}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Вовремя. Опоздало: <span className={late > 0 ? 'text-red-500 font-bold' : ''}>{late}</span>
-                </p>
-              </div>
+            <div className="w-full">
+              {renderProductivityChart()}
             </div>
+          </div>
 
-            {/* Карточка: Задачи */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xl">📋</div>
-                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">Всего задач</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{totalTasks}</p>
-                <p className="text-sm text-gray-500 mt-1">Ожидают выполнения: {totalTasks - completedTasks}</p>
-              </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+            <div className="p-6 border-b border-gray-100 bg-gray-50">
+              <h3 className="font-bold text-gray-800 text-lg">Общий рейтинг сотрудников</h3>
             </div>
-
-            {/* Карточка: Эффективность */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xl">📈</div>
-                <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">Прогресс</span>
-              </div>
-              <div>
-                <div className="flex items-end gap-2">
-                  <p className="text-3xl font-bold text-gray-800">{completionRate}%</p>
-                </div>
-                {/* Прогресс-бар */}
-                <div className="w-full bg-gray-100 rounded-full h-2 mt-3">
-                  <div className="bg-green-500 h-2 rounded-full" style={{ width: `${completionRate}%` }}></div>
-                </div>
-              </div>
+            <div className="overflow-x-auto max-h-[400px]">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-white sticky top-0 shadow-sm z-10">
+                  <tr>
+                    <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">Сотрудник</th>
+                    {analytics.scope === 'institute' && <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">Кафедра</th>}
+                    <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100 text-center">Задачи (Готово / Всего)</th>
+                    <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100 text-center">Качество</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {analytics.employees.map(emp => (
+                    <tr key={emp.id} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="py-4 px-6"><Link to={`/profile/${emp.id}`} className="font-bold text-gray-800 hover:text-blue-600 transition">{emp.name}</Link></td>
+                      {analytics.scope === 'institute' && <td className="py-4 px-6 text-sm text-gray-600">{analytics.departments.find(d => d.id === emp.department_id)?.name || 'Нет'}</td>}
+                      <td className="py-4 px-6 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="font-bold text-gray-800">{emp.completed}</span>
+                          <span className="text-gray-400">/</span>
+                          <span className="text-gray-500">{emp.total}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className={`font-bold px-2.5 py-1 rounded-lg text-sm ${emp.quality >= 4.5 ? 'bg-green-100 text-green-700' : emp.quality >= 3.5 ? 'bg-yellow-100 text-yellow-700' : emp.quality > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {emp.quality > 0 ? `★ ${emp.quality}` : 'Нет'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
           </div>
         </>
+      ) : (
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Добро пожаловать в рабочее пространство!</h2>
+          <p className="text-gray-500">У вас нет прав администратора для просмотра глобальной аналитики.</p>
+        </div>
       )}
 
-      {/* НИЖНИЙ БЛОК: Задачи пользователя и Быстрые действия */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        
-        {/* Левая часть: Мои актуальные задачи */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-800 text-lg">Вам поручено (В работе)</h3>
-            <Link to="/tasks" className="text-sm text-blue-600 hover:underline font-medium">Смотреть все &rarr;</Link>
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto max-h-[350px]">
-            {myActiveTasks.length > 0 ? (
-              <div className="space-y-4">
-                {myActiveTasks.slice(0, 5).map(task => (
-                  <Link 
-                    key={task.id} 
-                    to={`/tasks/${task.id}`}
-                    className="block p-4 border border-gray-100 rounded-xl hover:border-blue-300 hover:shadow-md transition group"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-bold text-gray-800 group-hover:text-blue-600 transition">{task.title}</h4>
-                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded ${
-                        task.status === 'created' ? 'bg-gray-100 text-gray-600' :
-                        task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                        task.status === 'revision' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {task.status_display}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 line-clamp-1">{task.description}</p>
-                    <div className="mt-3 flex justify-between items-center text-xs text-gray-400">
-                      <span>Дедлайн: {new Date(task.deadline).toLocaleDateString('ru-RU')}</span>
-                      <span>Постановщик: {task.creator?.last_name || 'Система'}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 py-10">
-                <span className="text-4xl mb-3">🎉</span>
-                <p>У вас нет активных задач! Можно выдохнуть.</p>
-              </div>
-            )}
-          </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col mt-6">
+        <div className="p-6 border-b border-gray-100 bg-gray-50">
+          <h3 className="font-bold text-gray-800 text-lg">Ваши горящие задачи</h3>
         </div>
-
-        {/* Правая часть: Быстрые переходы */}
-        <div className="lg:col-span-1 space-y-6">
-          
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-bold text-gray-800 mb-4">Быстрые действия</h3>
-            <div className="space-y-3">
-              <Link to="/profile" className="flex items-center p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition group">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mr-3 group-hover:bg-blue-600 group-hover:text-white transition">👤</div>
-                <div>
-                  <p className="font-bold text-gray-800 text-sm">Мой профиль</p>
-                  <p className="text-xs text-gray-500">Личное дело и посещаемость</p>
-                </div>
-              </Link>
-              
-              <Link to="/departments" className="flex items-center p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition group">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mr-3 group-hover:bg-emerald-600 group-hover:text-white transition">🏢</div>
-                <div>
-                  <p className="font-bold text-gray-800 text-sm">Структура</p>
-                  <p className="text-xs text-gray-500">Справочник сотрудников</p>
-                </div>
-              </Link>
-
-              {isAdmin && (
-                <Link to="/tasks" className="flex items-center p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition group">
-                  <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center mr-3 group-hover:bg-purple-600 group-hover:text-white transition">➕</div>
-                  <div>
-                    <p className="font-bold text-gray-800 text-sm">Создать задачу</p>
-                    <p className="text-xs text-gray-500">Поручить дело сотруднику</p>
-                  </div>
-                </Link>
-              )}
-            </div>
-          </div>
-
+        <div className="p-6 overflow-x-auto flex gap-4">
+          {myActiveTasks.length > 0 ? myActiveTasks.map(task => (
+            <Link key={task.id} to={`/tasks/${task.id}`} className="min-w-[280px] p-5 border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition">
+              <h4 className="font-bold text-gray-800 mb-2 line-clamp-1">{task.title}</h4>
+            </Link>
+          )) : <div className="text-gray-400 py-6 w-full text-center">Нет горящих задач</div>}
         </div>
-
       </div>
     </div>
   );

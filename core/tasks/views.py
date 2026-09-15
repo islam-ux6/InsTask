@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Task, TaskReport
+from .models import Task, TaskReport, TaskStatusLog
 from .serializers import TaskSerializer, TaskReportSerializer
 from .permissions import IsTaskParticipant, IsAssigneeForAccept 
 
@@ -42,18 +42,25 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         instance = self.get_object()
         old_status = instance.status
+        new_status = serializer.validated_data.get('status', old_status)
 
-        updated_task = serializer.save()
+        if new_status != old_status:
+            # 1. Останавливаем секундомер для старого статуса
+            last_log = instance.status_logs.filter(status=old_status, exited_at__isnull=True).last()
+            if last_log:
+                last_log.exited_at = timezone.now()
+                last_log.save()
+            
+            # 2. Запускаем секундомер для нового статуса
+            TaskStatusLog.objects.create(task=instance, status=new_status)
 
-        # Автоматический счетчик доработок
-        if old_status != Task.Status.REVISION and updated_task.status == Task.Status.REVISION:
-            updated_task.revision_count += 1
-            updated_task.save(update_fields=['revision_count'])
+            # Обновляем метрики для Радара (доработки и дедлайны)
+            if new_status == 'revision':
+                serializer.validated_data['revision_count'] = instance.revision_count + 1
+            if new_status == 'completed':
+                serializer.validated_data['completed_at'] = timezone.now()
 
-        # Автоматическая фиксация времени выполнения
-        if old_status != Task.Status.COMPLETED and updated_task.status == Task.Status.COMPLETED:
-            updated_task.completed_at = timezone.now()
-            updated_task.save(update_fields=['completed_at'])
+        serializer.save()
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAssigneeForAccept]) # Добавь IsAssigneeForAccept
     def accept(self, request, pk=None):

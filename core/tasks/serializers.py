@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Task, TaskReport
+from .models import Task, TaskReport, TaskStatusLog
 from accounts.models import User
 from departments.models import Department
 
@@ -21,11 +21,20 @@ class TaskReportSerializer(serializers.ModelSerializer):
         fields = ['id', 'task', 'author', 'comment', 'attached_file', 'submitted_at']
         read_only_fields = ['task', 'author']
 
+class TaskStatusLogSerializer(serializers.ModelSerializer):
+    hours_spent = serializers.ReadOnlyField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = TaskStatusLog
+        fields = ['id', 'status', 'status_display', 'entered_at', 'exited_at', 'hours_spent']
+
 class TaskSerializer(serializers.ModelSerializer):
     creator = UserMiniSerializer(read_only=True)
     # Для чтения отдаем красивые объекты
     assignees = UserMiniSerializer(many=True, read_only=True)
     target_departments = DepartmentMiniSerializer(many=True, read_only=True)
+    status_logs = TaskStatusLogSerializer(many=True, read_only=True)
     
     # Для записи принимаем массивы ID (например: [1, 3, 5])
     assignees_ids = serializers.PrimaryKeyRelatedField(
@@ -56,7 +65,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'target_departments', 'target_departments_ids',
             'status', 'status_display', 
             'created_at', 'deadline', 'completed_at', 
-            'revision_count', 'quality_score', 'reports'
+            'revision_count', 'quality_score', 'reports', 'status_logs'
         ]
         read_only_fields = ['created_at', 'completed_at', 'revision_count']
 
