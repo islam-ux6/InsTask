@@ -4,23 +4,21 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from departments.models import Department
-from tasks.models import Task, TaskStatusLog  # <-- Добавили TaskStatusLog
+from tasks.models import Task, TaskStatusLog
 from accounts.models import DailyAttendance
 
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = 'Генерирует пользователей, задачи и исторические логи времени для проверки графиков задержек'
+    help = 'Генерирует 120 задач для тестирования графика риска выгорания'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write('Начинаем генерацию данных (с логами времени)...')
+        self.stdout.write('Начинаем генерацию большого объема данных (120 задач)...')
         password = 'password123'
 
-        # --- 1. КАФЕДРЫ ---
         dept_it, _ = Department.objects.get_or_create(name='Кафедра Информационных Технологий')
         dept_math, _ = Department.objects.get_or_create(name='Кафедра Высшей Математики')
 
-        # --- 2. РУКОВОДСТВО ---
         rector, _ = User.objects.get_or_create(username='rector', defaults={
             'first_name': 'Иван', 'last_name': 'Ректоров',
             'position': User.Position.RECTOR, 'work_status': User.WorkStatus.WORKING
@@ -48,7 +46,6 @@ class Command(BaseCommand):
         dept_math.head = zav_math; dept_math.save()
         zavs = [zav_it, zav_math]
 
-        # --- 3. ПРЕПОДАВАТЕЛИ ---
         teachers_data = [
             ('teach_it_1', 'Алексей', 'Кодеров', dept_it),
             ('teach_it_2', 'Мария', 'Базова', dept_it),
@@ -68,36 +65,33 @@ class Command(BaseCommand):
             t.save()
             teachers.append(t)
 
-        # --- 4. ПОСЕЩАЕМОСТЬ ---
         today = timezone.localdate()
         for u in [rector] + zavs + teachers:
             status = DailyAttendance.Status.ON_TIME if random.random() > 0.2 else DailyAttendance.Status.LATE
             if not DailyAttendance.objects.filter(user=u, date=today).exists():
                 DailyAttendance.objects.create(user=u, status=status)
 
-        # --- 5. ОЧИЩАЕМ СТАРЫЕ ЗАДАЧИ ---
-        self.stdout.write('Удаляем старые задачи для чистоты эксперимента...')
+        self.stdout.write('Очистка старых задач...')
         Task.objects.all().delete()
         TaskStatusLog.objects.all().delete()
 
-        # --- 6. МАШИНА ВРЕМЕНИ ДЛЯ ЗАДАЧ ---
-        self.stdout.write('Генерируем новые задачи и историю их перемещений...')
+        self.stdout.write('Генерация 120 новых задач...')
+        # Уменьшили шанс статуса "Завершена", чтобы было больше активных задач
         statuses = [
-            Task.Status.COMPLETED, Task.Status.COMPLETED, Task.Status.COMPLETED,
-            Task.Status.IN_PROGRESS, Task.Status.ON_REVIEW, Task.Status.REVISION
+            Task.Status.COMPLETED, Task.Status.IN_PROGRESS, Task.Status.IN_PROGRESS, 
+            Task.Status.ON_REVIEW, Task.Status.REVISION, Task.Status.CREATED
         ]
 
-        for i in range(40): # Сделаем 40 задач для наглядности
+        for i in range(120): # Увеличили до 120
             creator = random.choice([rector] + zavs)
             status = random.choice(statuses)
             
-            # Задача была создана от 7 до 20 дней назад
             days_ago = random.randint(7, 20)
             t_created = timezone.now() - timedelta(days=days_ago)
 
             task = Task.objects.create(
-                title=f'Аналитика времени #{i+1}',
-                description='Генерация задержек',
+                title=f'Аналитика нагрузки #{i+1}',
+                description='Генерация перегрузки',
                 creator=creator,
                 status=status,
                 deadline=t_created + timedelta(days=14)
@@ -108,15 +102,13 @@ class Command(BaseCommand):
             else:
                 dept_teachers = [t for t in teachers if t.department == creator.department]
                 if dept_teachers:
+                    # Назначаем задачу рандомному преподу. Кто-то получит 15 задач, кто-то 2
                     task.assignees.add(random.choice(dept_teachers))
 
-            # --- Функция для записи фейковых логов времени ---
             def create_log(stat, entered, exited):
                 log = TaskStatusLog.objects.create(task=task, status=stat)
-                # Используем update, чтобы обойти auto_now_add
                 TaskStatusLog.objects.filter(id=log.id).update(entered_at=entered, exited_at=exited)
 
-            # Шаг 1: Создана (висит от 2 до 24 часов)
             t_in_progress = t_created + timedelta(hours=random.randint(2, 24))
 
             if status == Task.Status.CREATED:
@@ -127,14 +119,14 @@ class Command(BaseCommand):
                 create_log(Task.Status.IN_PROGRESS, t_in_progress, None)
 
             elif status == Task.Status.ON_REVIEW:
-                t_on_review = t_in_progress + timedelta(hours=random.randint(24, 96)) # В работе от 1 до 4 дней
+                t_on_review = t_in_progress + timedelta(hours=random.randint(24, 96))
                 create_log(Task.Status.CREATED, t_created, t_in_progress)
                 create_log(Task.Status.IN_PROGRESS, t_in_progress, t_on_review)
                 create_log(Task.Status.ON_REVIEW, t_on_review, None)
 
             elif status == Task.Status.REVISION:
                 t_on_review = t_in_progress + timedelta(hours=random.randint(24, 72))
-                t_revision = t_on_review + timedelta(hours=random.randint(12, 48)) # На проверке 1-2 дня
+                t_revision = t_on_review + timedelta(hours=random.randint(12, 48))
                 create_log(Task.Status.CREATED, t_created, t_in_progress)
                 create_log(Task.Status.IN_PROGRESS, t_in_progress, t_on_review)
                 create_log(Task.Status.ON_REVIEW, t_on_review, t_revision)
@@ -154,4 +146,4 @@ class Command(BaseCommand):
                 task.completed_at = t_completed
                 task.save()
 
-        self.stdout.write(self.style.SUCCESS('Готово! База загружена, логи времени (часы) сгенерированы.'))
+        self.stdout.write(self.style.SUCCESS('Готово! Сгенерировано 120 задач. Тепловая карта теперь должна гореть!'))

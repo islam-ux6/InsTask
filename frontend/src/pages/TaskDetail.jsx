@@ -14,25 +14,20 @@ export default function TaskDetail() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Состояния для формы отчета
   const [comment, setComment] = useState('');
   const [file, setFile] = useState(null);
   const [submittingReport, setSubmittingReport] = useState(false);
 
-  // Загрузка данных
   const fetchTaskData = async () => {
     try {
       const [meRes, taskRes, reportsRes] = await Promise.all([
         api.get('/users/me/'),
         api.get(`/tasks/${id}/`),
-        // Предполагается, что у тебя есть эндпоинт отчетов, фильтруемый по задаче
         api.get(`/reports/?task=${id}`).catch(() => ({ data: [] }))
       ]);
       
       setCurrentUser(meRes.data);
       setTask(taskRes.data);
-      
-      // Если отчеты вложены в саму задачу (nested serializer), берем оттуда. Иначе из отдельного запроса.
       setReports(taskRes.data.reports || reportsRes.data || []);
       
     } catch (error) {
@@ -46,18 +41,16 @@ export default function TaskDetail() {
     fetchTaskData();
   }, [id]);
 
-  // Смена статуса задачи
   const handleStatusChange = async (newStatus) => {
     try {
       await api.patch(`/tasks/${id}/`, { status: newStatus });
-      fetchTaskData(); // Перезагружаем данные, чтобы обновился секундомер и статус
+      fetchTaskData();
     } catch (error) {
       alert('Ошибка при изменении статуса');
       console.error(error);
     }
   };
 
-  // Отправка отчета (TaskReport)
   const handleSubmitReport = async (e) => {
     e.preventDefault();
     if (!comment.trim()) return;
@@ -67,10 +60,7 @@ export default function TaskDetail() {
       const formData = new FormData();
       formData.append('task', id);
       formData.append('comment', comment);
-      if (file) {
-        formData.append('attached_file', file);
-      }
-      // Author добавляется на бэкенде автоматически через request.user (в идеале)
+      if (file) formData.append('attached_file', file);
       
       await api.post('/reports/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -78,7 +68,7 @@ export default function TaskDetail() {
       
       setComment('');
       setFile(null);
-      fetchTaskData(); // Обновляем ленту отчетов
+      fetchTaskData(); 
     } catch (error) {
       alert('Ошибка при отправке отчета');
       console.error(error);
@@ -90,13 +80,10 @@ export default function TaskDetail() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Загрузка задачи...</div>;
   if (!task || !currentUser) return <div className="text-center text-gray-500 mt-20">Задача не найдена</div>;
 
-  // --- АНАЛИТИКА ВРЕМЕНИ ИЗ status_logs ---
   let timeMetrics = { created: 0, in_progress: 0, on_review: 0, revision: 0, completed: 0 };
   if (task.status_logs && task.status_logs.length > 0) {
     task.status_logs.forEach(log => {
-      if (timeMetrics[log.status] !== undefined) {
-        timeMetrics[log.status] += (log.hours_spent || 0);
-      }
+      if (timeMetrics[log.status] !== undefined) timeMetrics[log.status] += (log.hours_spent || 0);
     });
   }
   Object.keys(timeMetrics).forEach(key => timeMetrics[key] = parseFloat(timeMetrics[key].toFixed(1)));
@@ -110,10 +97,10 @@ export default function TaskDetail() {
   }];
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
-  const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
   
-  // Проверяем, является ли пользователь исполнителем
+  // === ИСПРАВЛЕННАЯ ЛОГИКА ПРАВ ДОСТУПА ===
   const isAssignee = task.assignees?.some(a => a.id === currentUser.id);
+  const isCreator = task.creator?.id === currentUser.id; // Только Постановщик может принимать задачу!
 
   return (
     <div className="max-w-6xl mx-auto pb-10 space-y-6">
@@ -123,7 +110,6 @@ export default function TaskDetail() {
         </button>
       </div>
 
-      {/* ШАПКА ЗАДАЧИ И КНОПКИ СМЕНЫ СТАТУСА */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col lg:flex-row justify-between items-start gap-6">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-3">
@@ -136,16 +122,14 @@ export default function TaskDetail() {
               {task.status_display || task.status}
             </span>
             {isOverdue && (
-              <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">
-                ПРОСРОЧЕНО
-              </span>
+              <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">ПРОСРОЧЕНО</span>
             )}
           </div>
           <h1 className="text-3xl font-bold text-gray-800">{task.title}</h1>
           <p className="text-gray-600 mt-4 max-w-3xl whitespace-pre-wrap">{task.description}</p>
         </div>
         
-        {/* ПАНЕЛЬ ДЕЙСТВИЙ (СМЕНА СТАТУСА) */}
+        {/* === ИСПРАВЛЕННЫЕ КНОПКИ СМЕНЫ СТАТУСА === */}
         <div className="flex flex-col gap-2 min-w-[200px]">
           {task.status === 'created' && isAssignee && (
             <button onClick={() => handleStatusChange('in_progress')} className="bg-blue-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-blue-700 transition">
@@ -157,7 +141,9 @@ export default function TaskDetail() {
               Отправить на проверку
             </button>
           )}
-          {task.status === 'on_review' && isAdmin && (
+          
+          {/* КНОПКИ ДОСТУПНЫ ТОЛЬКО ПОСТАНОВЩИКУ (isCreator) */}
+          {task.status === 'on_review' && isCreator && (
             <>
               <button onClick={() => handleStatusChange('completed')} className="bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-700 transition">
                 Принять (Завершить)
@@ -172,10 +158,7 @@ export default function TaskDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* ЦЕНТРАЛЬНАЯ КОЛОНКА (Аналитика и Отчеты) */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* 1. ГРАФИК ЗАДЕРЖЕК (БУТЫЛОЧНОЕ ГОРЛЫШКО) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-bold text-gray-800 text-lg mb-1">Таймлайн задержек</h3>
             <p className="text-sm text-gray-500 mb-6">Время, проведенное задачей в каждом статусе (в часах)</p>
@@ -189,7 +172,6 @@ export default function TaskDetail() {
                     <YAxis type="category" dataKey="name" hide />
                     <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px' }} />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '5px' }} />
-                    
                     <Bar dataKey="Создана" stackId="a" fill="#9ca3af" name="Ожидание (ч)" />
                     <Bar dataKey="В работе" stackId="a" fill="#3b82f6" name="В работе (ч)" />
                     <Bar dataKey="На проверке" stackId="a" fill="#f59e0b" name="На проверке (ч)" />
@@ -202,14 +184,12 @@ export default function TaskDetail() {
             )}
           </div>
 
-          {/* 2. ЛЕНТА ОТЧЕТОВ И ФОРМА */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
               <h3 className="font-bold text-gray-800 text-lg">Отчеты и комментарии</h3>
             </div>
             
-            {/* Форма добавления отчета */}
-            {(isAssignee || isAdmin) && task.status !== 'completed' && (
+            {(isAssignee || isCreator) && task.status !== 'completed' && (
               <div className="p-6 border-b border-gray-100">
                 <form onSubmit={handleSubmitReport}>
                   <textarea 
@@ -238,7 +218,6 @@ export default function TaskDetail() {
               </div>
             )}
 
-            {/* Список отчетов */}
             <div className="p-6 space-y-6">
               {reports.length > 0 ? reports.map((rep, index) => (
                 <div key={index} className="flex gap-4">
@@ -268,10 +247,8 @@ export default function TaskDetail() {
               )}
             </div>
           </div>
-
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА (Мета-данные) */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">Информация</h3>
@@ -289,7 +266,7 @@ export default function TaskDetail() {
               <div>
                 <p className="text-gray-400 font-medium mb-1">Постановщик</p>
                 <p className="text-gray-800 font-bold">
-                  {task.creator?.first_name} {task.creator?.last_name}
+                  {task.creator?.last_name} {task.creator?.first_name}
                 </p>
               </div>
               <div>
@@ -338,7 +315,6 @@ export default function TaskDetail() {
             )}
           </div>
         </div>
-
       </div>
     </div>
   );

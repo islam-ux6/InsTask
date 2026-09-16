@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, Avg, F
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from tasks.models import Task, TaskStatusLog  # <-- ВАЖНО: Добавили TaskStatusLog
+from tasks.models import Task, TaskStatusLog
 from departments.models import Department
 from accounts.models import DailyAttendance
 
@@ -30,20 +30,17 @@ class DashboardAnalyticsView(APIView):
         else:
             return Response({"detail": "Нет прав"}, status=403)
 
-        # --- Хелпер для подсчета времени (Бутылочные горлышки) ---
         def get_cycle_time(log_qs):
             logs = list(log_qs.filter(exited_at__isnull=False))
             def avg_hours(status_name):
                 st_logs = [l for l in logs if l.status == status_name]
                 return round(sum(l.hours_spent for l in st_logs) / len(st_logs), 1) if st_logs else 0
-            
             return {
                 "in_progress": avg_hours('in_progress'),
                 "on_review": avg_hours('on_review'),
                 "revision": avg_hours('revision'),
             }
 
-        # --- 1. ОБЩИЕ KPI ---
         total_tasks = tasks_qs.count()
         completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETED).count()
         completion_rate = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
@@ -53,7 +50,6 @@ class DashboardAnalyticsView(APIView):
         on_time = today_attendance.filter(status=DailyAttendance.Status.ON_TIME).count()
         late = today_attendance.filter(status=DailyAttendance.Status.LATE).count()
 
-        # --- 2. АНАЛИТИКА ПО КАФЕДРАМ ---
         departments_data = []
         if user.is_rectorate:
             for dept in Department.objects.all():
@@ -61,8 +57,6 @@ class DashboardAnalyticsView(APIView):
                 d_tot = d_tasks.count()
                 d_comp = d_tasks.filter(status=Task.Status.COMPLETED).count()
                 d_qual = d_tasks.filter(status=Task.Status.COMPLETED).aggregate(Avg('quality_score'))['quality_score__avg'] or 0
-                
-                # Считаем время для кафедры
                 d_logs = TaskStatusLog.objects.filter(task__target_departments=dept)
 
                 departments_data.append({
@@ -72,7 +66,7 @@ class DashboardAnalyticsView(APIView):
                     "completed": d_comp,
                     "completion_rate": round((d_comp / d_tot) * 100) if d_tot > 0 else 0,
                     "quality": round(d_qual, 1),
-                    "cycle_time": get_cycle_time(d_logs), # Интегрируем время!
+                    "cycle_time": get_cycle_time(d_logs),
                     "statuses": {
                         "created": d_tasks.filter(status=Task.Status.CREATED).count(),
                         "in_progress": d_tasks.filter(status=Task.Status.IN_PROGRESS).count(),
@@ -82,7 +76,6 @@ class DashboardAnalyticsView(APIView):
                     }
                 })
 
-        # --- 3. АНАЛИТИКА ПО СОТРУДНИКАМ ---
         employees_data = []
         max_tasks_in_qs = 1 
         for u in users_qs:
@@ -112,8 +105,16 @@ class DashboardAnalyticsView(APIView):
             
             radar_volume = round((e_tot / max_tasks_in_qs) * 100)
 
-            # Считаем время для конкретного сотрудника
             e_logs = TaskStatusLog.objects.filter(task__assignees=emp)
+            
+            # --- НОВОЕ: Считаем статистику доработок ---
+            # Берем вообще все задачи, которые брались в работу (исключаем только созданные)
+            active_and_completed_tasks = e_tasks.exclude(status=Task.Status.CREATED)
+            total_worked = active_and_completed_tasks.count()
+            
+            rev_0 = active_and_completed_tasks.filter(revision_count=0).count()
+            rev_1 = active_and_completed_tasks.filter(revision_count=1).count()
+            rev_2_plus = active_and_completed_tasks.filter(revision_count__gte=2).count()
 
             employees_data.append({
                 "id": emp.id,
@@ -124,7 +125,14 @@ class DashboardAnalyticsView(APIView):
                 "completion_rate": round((e_comp / e_tot) * 100) if e_tot > 0 else 0,
                 "quality": round(e_qual_raw, 1),
                 "discipline": radar_discipline,
-                "cycle_time": get_cycle_time(e_logs), # Интегрируем время!
+                "cycle_time": get_cycle_time(e_logs),
+                "revisions": {
+                    "total_evaluated": total_worked,
+                    "zero_revisions": rev_0,
+                    "one_revision": rev_1,
+                    "multiple_revisions": rev_2_plus,
+                    "first_time_success_rate": round((rev_0 / total_worked) * 100) if total_worked > 0 else 0
+                },
                 "radar": {
                     "quality": radar_quality,
                     "discipline": radar_discipline,

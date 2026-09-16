@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer,
-  Line, ComposedChart,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
+  Line, ComposedChart, Cell, ReferenceLine,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  PieChart, Pie // <-- Добавили PieChart
 } from 'recharts';
 
 export default function Dashboard() {
@@ -13,9 +14,7 @@ export default function Dashboard() {
   const [myActiveTasks, setMyActiveTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Состояния для интерактивных графиков
   const [chartTarget, setChartTarget] = useState('all_emps'); 
-  // Возможные стейты: all_depts, all_emps, all_emps_in_dept, single, bottlenecks_emps, bottlenecks_depts
   const [selectedId, setSelectedId] = useState('');
 
   useEffect(() => {
@@ -100,7 +99,7 @@ export default function Dashboard() {
       );
     }
 
-    // 3. АНАЛИЗ ЗАДЕРЖЕК (БУТЫЛОЧНЫЕ ГОРЛЫШКИ)
+    // 3. АНАЛИЗ ЗАДЕРЖЕК
     if (chartTarget === 'bottlenecks_emps' || chartTarget === 'bottlenecks_depts') {
       const isDept = chartTarget === 'bottlenecks_depts';
       const sourceData = isDept ? analytics.departments : analytics.employees;
@@ -134,7 +133,93 @@ export default function Dashboard() {
       );
     }
 
-    // 4. КОНКРЕТНАЯ СУЩНОСТЬ (Воронка + Радар)
+    // 4. ТЕПЛОВАЯ КАРТА: ИНДЕКС ВЫГОРАНИЯ
+    if (chartTarget === 'burnout') {
+      const burnoutData = analytics.employees.map(emp => {
+        const active = emp.statuses.created + emp.statuses.in_progress + emp.statuses.revision;
+        return { ...emp, active_tasks: active };
+      }).sort((a, b) => b.active_tasks - a.active_tasks);
+
+      const totalActive = burnoutData.reduce((sum, emp) => sum + emp.active_tasks, 0);
+      const calcAvg = burnoutData.length ? totalActive / burnoutData.length : 0;
+      const avgActive = Math.max(calcAvg, 3);
+      
+      const overloaded = burnoutData.filter(emp => emp.active_tasks >= avgActive * 1.5);
+
+      return (
+        <div className="flex flex-col h-full">
+          <div className="mb-4 flex flex-col md:flex-row justify-between items-center bg-red-50 p-4 rounded-xl border border-red-100">
+            <div>
+              <h4 className="font-bold text-red-900 text-lg">Тепловая карта нагрузки</h4>
+              <p className="text-sm text-red-700">Оценка риска выгорания сотрудников на основе активных задач</p>
+            </div>
+            <div className="mt-2 md:mt-0 text-right">
+              <span className="text-xs font-bold text-red-800 uppercase tracking-wider">В зоне риска: </span>
+              <span className="bg-red-600 text-white px-3 py-1 rounded-lg font-bold text-sm ml-2">
+                {overloaded.length} чел.
+              </span>
+            </div>
+          </div>
+          
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={burnoutData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} interval={0} angle={-30} textAnchor="end" height={60} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
+              <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+              
+              <ReferenceLine 
+                y={avgActive} 
+                stroke="#f59e0b" 
+                strokeDasharray="3 3" 
+                label={{ position: 'top', value: `Норма нагрузки: ${avgActive.toFixed(1)}`, fill: '#f59e0b', fontSize: 11, fontWeight: 'bold' }} 
+              />
+              
+              <Bar dataKey="active_tasks" name="Активных задач" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                {burnoutData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.active_tasks >= avgActive * 1.5 ? '#ef4444' : entry.active_tasks > avgActive ? '#f59e0b' : '#10b981'} 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
+    // 5. НОВОЕ: ОБЩИЙ ГРАФИК ДОРАБОТОК (REVISION RATE)
+    if (chartTarget === 'revisions') {
+      // Исключаем тех, у кого нет завершенных/активных задач
+      const filteredEmps = analytics.employees.filter(e => e.revisions.total_evaluated > 0);
+      
+      return (
+        <div className="flex flex-col h-full">
+          <div className="mb-4 text-center">
+            <h4 className="font-bold text-gray-700">Частота доработок по сотрудникам</h4>
+            <p className="text-xs text-gray-500">Процент задач, сданных с первого раза (зеленый) против проблемных (красный)</p>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            {/* 100% Stacked Bar Chart */}
+            <BarChart data={filteredEmps} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+              <XAxis type="number" axisLine={false} tickLine={false} domain={[0, 'dataMax']} hide />
+              <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#555', fontWeight: 'bold' }} width={90} />
+              <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px' }} />
+              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+              
+              {/* Переводим в проценты для 100% графика */}
+              <Bar dataKey="revisions.zero_revisions" name="С 1-го раза (0 возвратов)" stackId="a" fill="#10b981" />
+              <Bar dataKey="revisions.one_revision" name="1 доработка" stackId="a" fill="#f59e0b" />
+              <Bar dataKey="revisions.multiple_revisions" name="2 и более доработок" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
+    // 6. КОНКРЕТНАЯ СУЩНОСТЬ (Воронка + Радар + Круговая диаграмма доработок)
     if (chartTarget === 'single') {
       let entity = analytics.employees.find(e => e.id === parseInt(selectedId));
       if (!entity) return <div className="text-center text-gray-400 mt-20">Выберите сотрудника для анализа</div>;
@@ -155,6 +240,13 @@ export default function Dashboard() {
         { subject: 'Объем', A: entity.radar?.volume || 0, fullMark: 100 },
       ];
 
+      // Данные для круговой диаграммы доработок (Pie Chart)
+      const revisionData = [
+        { name: 'С первого раза', value: entity.revisions?.zero_revisions || 0, fill: '#10b981' },
+        { name: '1 возврат', value: entity.revisions?.one_revision || 0, fill: '#f59e0b' },
+        { name: '2+ возврата', value: entity.revisions?.multiple_revisions || 0, fill: '#ef4444' }
+      ].filter(d => d.value > 0); // Прячем пустые сегменты
+
       return (
         <div className="flex flex-col h-full">
           <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-xl">
@@ -162,37 +254,81 @@ export default function Dashboard() {
               <h4 className="font-bold text-blue-900 text-lg">{entity.name}</h4>
               <p className="text-sm text-blue-700 mt-1">Детальный профиль продуктивности (Индекс: 0-100%)</p>
             </div>
-            <div className="text-right">
-              <span className="bg-blue-600 text-white px-3 py-1 rounded-lg font-bold">★ {entity.quality} / 5.0</span>
+            <div className="text-right flex gap-3">
+              <div className="bg-white px-3 py-1 rounded-lg border border-blue-200 text-blue-800 text-xs text-center">
+                <span className="block font-bold">Успех 1-го раза</span>
+                {entity.revisions?.first_time_success_rate}%
+              </div>
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-lg font-bold flex items-center">
+                ★ {entity.quality} / 5.0
+              </span>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-[300px]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 min-h-[300px]">
+            
+            {/* 1. Воронка */}
             <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col justify-center">
               <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center mb-2">Воронка задач</h5>
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                   <XAxis type="number" axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#555', fontWeight: 'bold' }} width={80} />
                   <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px' }} />
-                  <Bar dataKey="value" name="Задач" radius={[0, 4, 4, 0]} barSize={20} label={{ position: 'right', fill: '#888' }} />
+                  <Bar dataKey="value" name="Задач" radius={[0, 4, 4, 0]} barSize={15} label={{ position: 'right', fill: '#888' }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
+            {/* 2. Круговая диаграмма доработок (НОВОЕ) */}
+            <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col justify-center items-center">
+              <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center mb-2">Частота доработок</h5>
+              {revisionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={revisionData}
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {revisionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">Нет данных о доработках</div>
+              )}
+              {/* Легенда */}
+              <div className="flex flex-wrap justify-center gap-2 mt-2">
+                {revisionData.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-1 text-[10px] text-gray-600">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.fill }}></div>
+                    {entry.name} ({entry.value})
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Радар */}
             <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-4 shadow-sm flex flex-col justify-center">
               <h5 className="text-xs font-bold text-indigo-400 uppercase tracking-wider text-center mb-2">Комплексный профиль</h5>
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={200}>
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid stroke="#c7d2fe" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#4f46e5', fontSize: 11, fontWeight: 'bold' }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#4f46e5', fontSize: 10, fontWeight: 'bold' }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar name="Рейтинг (%)" dataKey="A" stroke="#4f46e5" strokeWidth={2} fill="#6366f1" fillOpacity={0.5} />
                   <ChartTooltip />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
+            
           </div>
         </div>
       );
@@ -238,43 +374,56 @@ export default function Dashboard() {
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-gray-100 pb-4">
               <h3 className="font-bold text-gray-800 text-xl">Центр продуктивности</h3>
               
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap justify-end gap-2 max-w-2xl">
                 {analytics.scope === 'institute' && (
                   <>
                     <button 
                       onClick={() => { setChartTarget('all_depts'); setSelectedId(''); }}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition ${chartTarget === 'all_depts' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'all_depts' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                     >
-                      Сравнение кафедр
+                      Кафедры
                     </button>
-                    {/* НОВАЯ КНОПКА ДЛЯ АНАЛИЗА ЗАДЕРЖЕК ПО КАФЕДРАМ */}
                     <button 
                       onClick={() => { setChartTarget('bottlenecks_depts'); setSelectedId(''); }}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${chartTarget === 'bottlenecks_depts' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'bottlenecks_depts' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
                     >
-                      ⏳ Задержки (Кафедры)
+                      ⏳ Задержки (Каф.)
                     </button>
                   </>
                 )}
                 
                 <button 
                   onClick={() => { setChartTarget('all_emps'); setSelectedId(''); }}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition ${chartTarget === 'all_emps' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'all_emps' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
-                  {analytics.scope === 'institute' ? 'Все сотрудники' : 'Сравнение сотрудников'}
+                  Сотрудники
                 </button>
 
-                {/* НОВАЯ КНОПКА ДЛЯ АНАЛИЗА ЗАДЕРЖЕК ПО СОТРУДНИКАМ */}
                 <button 
                   onClick={() => { setChartTarget('bottlenecks_emps'); setSelectedId(''); }}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${chartTarget === 'bottlenecks_emps' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'bottlenecks_emps' ? 'bg-yellow-500 text-white shadow-md' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
                 >
-                  ⏳ Задержки (Сотрудники)
+                  ⏳ Задержки
+                </button>
+
+                {/* НОВАЯ КНОПКА: ДОРАБОТКИ */}
+                <button 
+                  onClick={() => { setChartTarget('revisions'); setSelectedId(''); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'revisions' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                >
+                  🔄 Доработки
+                </button>
+
+                <button 
+                  onClick={() => { setChartTarget('burnout'); setSelectedId(''); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${chartTarget === 'burnout' ? 'bg-red-500 text-white shadow-md' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
+                >
+                  🔥 Выгорание
                 </button>
 
                 {analytics.scope === 'institute' && (
                   <select 
-                    className={`px-4 py-2 rounded-lg text-sm font-bold outline-none cursor-pointer border ${chartTarget === 'all_emps_in_dept' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold outline-none cursor-pointer border ${chartTarget === 'all_emps_in_dept' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
                     value={chartTarget === 'all_emps_in_dept' ? selectedId : ''}
                     onChange={(e) => {
                       if (e.target.value) {
@@ -291,7 +440,7 @@ export default function Dashboard() {
                 )}
 
                 <select 
-                  className={`px-4 py-2 rounded-lg text-sm font-bold outline-none cursor-pointer border ${chartTarget === 'single' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold outline-none cursor-pointer border ${chartTarget === 'single' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
                   value={chartTarget === 'single' ? selectedId : ''}
                   onChange={(e) => {
                     if (e.target.value) {
