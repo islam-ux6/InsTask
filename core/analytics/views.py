@@ -28,7 +28,9 @@ class DashboardAnalyticsView(APIView):
             ).distinct()
             scope = "department"
         else:
-            return Response({"detail": "Нет прав"}, status=403)
+            users_qs = User.objects.filter(id=user.id)
+            tasks_qs = Task.objects.filter(assignees=user)
+            scope = "personal"
 
         def get_cycle_time(log_qs):
             logs = list(log_qs.filter(exited_at__isnull=False))

@@ -97,10 +97,8 @@ export default function TaskDetail() {
   }];
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
-  
-  // === ИСПРАВЛЕННАЯ ЛОГИКА ПРАВ ДОСТУПА ===
   const isAssignee = task.assignees?.some(a => a.id === currentUser.id);
-  const isCreator = task.creator?.id === currentUser.id; // Только Постановщик может принимать задачу!
+  const isCreator = task.creator?.id === currentUser.id; 
 
   return (
     <div className="max-w-6xl mx-auto pb-10 space-y-6">
@@ -129,7 +127,6 @@ export default function TaskDetail() {
           <p className="text-gray-600 mt-4 max-w-3xl whitespace-pre-wrap">{task.description}</p>
         </div>
         
-        {/* === ИСПРАВЛЕННЫЕ КНОПКИ СМЕНЫ СТАТУСА === */}
         <div className="flex flex-col gap-2 min-w-[200px]">
           {task.status === 'created' && isAssignee && (
             <button onClick={() => handleStatusChange('in_progress')} className="bg-blue-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-blue-700 transition">
@@ -142,7 +139,6 @@ export default function TaskDetail() {
             </button>
           )}
           
-          {/* КНОПКИ ДОСТУПНЫ ТОЛЬКО ПОСТАНОВЩИКУ (isCreator) */}
           {task.status === 'on_review' && isCreator && (
             <>
               <button onClick={() => handleStatusChange('completed')} className="bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-700 transition">
@@ -163,7 +159,8 @@ export default function TaskDetail() {
             <h3 className="font-bold text-gray-800 text-lg mb-1">Таймлайн задержек</h3>
             <p className="text-sm text-gray-500 mb-6">Время, проведенное задачей в каждом статусе (в часах)</p>
             
-            {(timeMetrics.created > 0 || timeMetrics.in_progress > 0 || timeMetrics.on_review > 0) ? (
+            {/* ИСПРАВЛЕНИЕ: Теперь график показывается ВСЕГДА, если есть хотя бы 1 лог статуса (даже если прошло 0.0 часов) */}
+            {task.status_logs && task.status_logs.length > 0 ? (
               <div className="w-full">
                 <ResponsiveContainer width="100%" height={100}>
                   <BarChart data={timeData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
@@ -178,9 +175,29 @@ export default function TaskDetail() {
                     <Bar dataKey="На доработке" stackId="a" fill="#ef4444" name="На доработке (ч)" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                
+                {/* Текстовая расшифровка снизу */}
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-6">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 font-bold uppercase">Ожидание</p>
+                    <p className="text-xl font-black text-gray-600">{timeMetrics.created} <span className="text-xs font-normal">ч.</span></p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-blue-400 font-bold uppercase">В работе</p>
+                    <p className="text-xl font-black text-blue-600">{timeMetrics.in_progress} <span className="text-xs font-normal">ч.</span></p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-yellow-500 font-bold uppercase">Проверка</p>
+                    <p className="text-xl font-black text-yellow-600">{timeMetrics.on_review} <span className="text-xs font-normal">ч.</span></p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-red-400 font-bold uppercase">Доработка</p>
+                    <p className="text-xl font-black text-red-500">{timeMetrics.revision} <span className="text-xs font-normal">ч.</span></p>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="text-center text-gray-400 py-6">Статистика времени собирается...</div>
+              <div className="text-center text-gray-400 py-6">Нет данных о смене статусов...</div>
             )}
           </div>
 
@@ -222,11 +239,13 @@ export default function TaskDetail() {
               {reports.length > 0 ? reports.map((rep, index) => (
                 <div key={index} className="flex gap-4">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
-                    {rep.author_name ? rep.author_name.charAt(0) : 'U'}
+                    {rep.author?.last_name ? rep.author.last_name.charAt(0) : 'U'}
                   </div>
                   <div className="flex-1 bg-gray-50 p-4 rounded-xl rounded-tl-none border border-gray-100">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-gray-800">{rep.author_name || 'Сотрудник'}</span>
+                      <span className="font-bold text-gray-800">
+                        {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : 'Сотрудник'}
+                      </span>
                       <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString('ru-RU')}</span>
                     </div>
                     <p className="text-gray-700 text-sm whitespace-pre-wrap">{rep.comment}</p>

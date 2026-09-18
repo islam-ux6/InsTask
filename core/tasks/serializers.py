@@ -36,8 +36,9 @@ class TaskSerializer(serializers.ModelSerializer):
     target_departments = DepartmentMiniSerializer(many=True, read_only=True)
     status_logs = TaskStatusLogSerializer(many=True, read_only=True)
     
-    # Для записи принимаем массивы ID (например: [1, 3, 5])
-    assignees_ids = serializers.PrimaryKeyRelatedField(
+    # ИСПРАВЛЕНИЕ: Переименовали ключи, чтобы они совпадали с фронтендом 
+    # (убрали букву 's' перед '_ids')
+    assignee_ids = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), 
         source='assignees',
         write_only=True,
@@ -45,7 +46,7 @@ class TaskSerializer(serializers.ModelSerializer):
         required=False,
         label='Исполнители'
     )
-    target_departments_ids = serializers.PrimaryKeyRelatedField(
+    target_department_ids = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.all(),
         source='target_departments',
         write_only=True,
@@ -61,8 +62,8 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'title', 'description', 'parent_task', 
-            'creator', 'assignees', 'assignees_ids', 
-            'target_departments', 'target_departments_ids',
+            'creator', 'assignees', 'assignee_ids',  # Обновили название здесь
+            'target_departments', 'target_department_ids', # И здесь
             'status', 'status_display', 
             'created_at', 'deadline', 'completed_at', 
             'revision_count', 'quality_score', 'reports', 'status_logs'
@@ -72,13 +73,26 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate_status(self, value):
         request = self.context.get('request')
         if not self.instance:
+            # При создании новой задачи статус всегда 'created'
             return 'created'
             
         if request and hasattr(request, 'user'):
             user = request.user
-            # Если это не менеджер и не ректорат, значит это преподаватель
+            # Если это не ректор и не завкафедрой (т.е. обычный преподаватель)
             if not user.is_manager and not user.is_rectorate:
-                raise serializers.ValidationError("Преподаватели не могут менять статус вручную.")
+                old_status = self.instance.status
+                
+                # РАЗРЕШЕННЫЕ ПЕРЕХОДЫ ДЛЯ ПРЕПОДАВАТЕЛЯ:
+                # 1. Можно взять задачу в работу
+                if old_status == 'created' and value == 'in_progress':
+                    return value
+                # 2. Можно отправить готовую задачу или доработку на проверку
+                if old_status in ['in_progress', 'revision'] and value == 'on_review':
+                    return value
+                
+                # Если преподаватель пытается сам "Завершить" задачу или сделать что-то еще - блокируем!
+                raise serializers.ValidationError("Преподавателям запрещено переводить задачу в этот статус.")
+                
         return value
 
     def validate_quality_score(self, value):

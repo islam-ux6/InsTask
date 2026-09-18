@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 
 
 class Task(models.Model):
@@ -74,18 +75,27 @@ class TaskReport(models.Model):
 
 # Добавь этот класс в tasks/models.py
 class TaskStatusLog(models.Model):
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='status_logs')
+    task = models.ForeignKey('Task', on_delete=models.CASCADE, related_name='status_logs')
     status = models.CharField(max_length=20, choices=Task.Status.choices, verbose_name='Статус')
     entered_at = models.DateTimeField(auto_now_add=True, verbose_name='Время перехода в статус')
     exited_at = models.DateTimeField(null=True, blank=True, verbose_name='Время выхода из статуса')
     
     @property
     def hours_spent(self):
-        """Вычисляет, сколько часов задача провела в этом статусе"""
-        if self.exited_at:
-            delta = self.exited_at - self.entered_at
-            return round(delta.total_seconds() / 3600, 1) # Переводим секунды в часы
-        return 0
+        end_time = self.exited_at if self.exited_at else timezone.now()
+        
+        # Приводим оба значения к локальному времени Django, чтобы избежать
+        # бага, когда БД выдает UTC, а сервер работает в UTC+3 (или наоборот)
+        try:
+            end_local = timezone.localtime(end_time)
+            start_local = timezone.localtime(self.entered_at)
+            delta = end_local - start_local
+        except Exception:
+            # На случай, если время наивное (без часового пояса)
+            delta = end_time - self.entered_at
+
+        hours = delta.total_seconds() / 3600
+        return round(max(0, hours), 1)
 
     def __str__(self):
         return f"{self.task.title} - {self.get_status_display()}"
