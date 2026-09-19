@@ -19,7 +19,7 @@ class TaskReportSerializer(serializers.ModelSerializer):
         model = TaskReport
         # Используем правильные названия: comment, attached_file, submitted_at
         fields = ['id', 'task', 'author', 'comment', 'attached_file', 'submitted_at']
-        read_only_fields = ['task', 'author']
+        read_only_fields = ['author']
 
 class TaskStatusLogSerializer(serializers.ModelSerializer):
     hours_spent = serializers.ReadOnlyField()
@@ -73,32 +73,37 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate_status(self, value):
         request = self.context.get('request')
         if not self.instance:
-            # При создании новой задачи статус всегда 'created'
             return 'created'
             
         if request and hasattr(request, 'user'):
             user = request.user
-            # Если это не ректор и не завкафедрой (т.е. обычный преподаватель)
-            if not user.is_manager and not user.is_rectorate:
-                old_status = self.instance.status
+            old_status = self.instance.status
+            
+            # 1. Если это сам Постановщик задачи или Ректорат — разрешаем любые переходы
+            is_creator = (self.instance.creator == user)
+            if user.is_rectorate or is_creator:
+                return value
                 
-                # РАЗРЕШЕННЫЕ ПЕРЕХОДЫ ДЛЯ ПРЕПОДАВАТЕЛЯ:
-                # 1. Можно взять задачу в работу
-                if old_status == 'created' and value == 'in_progress':
-                    return value
-                # 2. Можно отправить готовую задачу или доработку на проверку
-                if old_status in ['in_progress', 'revision'] and value == 'on_review':
-                    return value
+            # 2. Если мы дошли сюда, значит пользователь — ИСПОЛНИТЕЛЬ 
+            # (Преподаватель, или Завкафедрой, выполняющий задачу Ректора).
+            # Оставляем им только права исполнителя:
+            if old_status == 'created' and value == 'in_progress':
+                return value
+            if old_status in ['in_progress', 'revision'] and value == 'on_review':
+                return value
                 
-                # Если преподаватель пытается сам "Завершить" задачу или сделать что-то еще - блокируем!
-                raise serializers.ValidationError("Преподавателям запрещено переводить задачу в этот статус.")
-                
+            # Блокируем всё остальное
+            raise serializers.ValidationError("Вы являетесь исполнителем этой задачи. Вы можете только брать её в работу или отправлять на проверку.")
+            
         return value
 
     def validate_quality_score(self, value):
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             user = request.user
-            if not user.is_manager and not user.is_rectorate:
-                raise serializers.ValidationError("Преподаватели не могут выставлять оценки.")
+            is_creator = (self.instance.creator == user if self.instance else False)
+            
+            # Только постановщик или Ректорат могут ставить оценки
+            if not user.is_rectorate and not is_creator:
+                raise serializers.ValidationError("Только постановщик задачи может выставлять оценку качества.")
         return value

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Изменено: используем useNavigate вместо Link для карточек
 import api from '../api';
 
 export default function Tasks() {
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -48,6 +49,47 @@ export default function Tasks() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // --- ЛОГИКА DRAG-AND-DROP ---
+  const handleDragStart = (e, taskId) => {
+    e.dataTransfer.setData('taskId', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault(); // Обязательно, чтобы разрешить сброс элемента
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (e, newStatus) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    if (!taskId) return;
+
+    const task = tasks.find(t => t.id === parseInt(taskId));
+    if (!task || task.status === newStatus) return;
+
+    // 1. Оптимистичное обновление: мгновенно переносим карточку в интерфейсе
+    const originalTasks = [...tasks];
+    setTasks(tasks.map(t => t.id === parseInt(taskId) ? { ...t, status: newStatus } : t));
+
+    try {
+      // 2. Отправляем запрос на сервер
+      await api.patch(`/tasks/${taskId}/`, { status: newStatus });
+      fetchData(); // Синхронизируем, чтобы получить правильные таймеры от бэкенда
+    } catch (error) {
+      // 3. Если сервер отклонил (например, нет прав) - откатываем интерфейс назад
+      setTasks(originalTasks);
+      
+      let errMsg = 'Ошибка при изменении статуса. Возможно, у вас нет прав на это действие.';
+      // Пытаемся вытащить текст ошибки из нашего validate_status в сериализаторе
+      if (error.response && error.response.data && error.response.data.status) {
+        errMsg = error.response.data.status[0];
+      }
+      alert(errMsg);
+    }
+  };
+  // ----------------------------
 
   const getFilteredTasks = () => {
     if (!currentUser) return [];
@@ -144,7 +186,6 @@ export default function Tasks() {
             {users.map(u => <option key={u.id} value={u.id}>{u.last_name} {u.first_name}</option>)}
           </select>
 
-          {/* ВОССТАНОВЛЕН ФИЛЬТР ПО КАФЕДРЕ ДЛЯ РЕКТОРА */}
           {currentUser.is_rectorate && (
             <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none">
               <option value="">Кафедра: Все</option>
@@ -166,13 +207,17 @@ export default function Tasks() {
           tasksInCol.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
           
           const totalTasks = tasksInCol.length;
-          // Ограничиваем только завершенные задачи, чтобы страница не висла
           if (col.id === 'completed' && totalTasks > 20) {
              tasksInCol = tasksInCol.slice(0, 20);
           }
 
           return (
-            <div key={col.id} className={`${col.bg} border ${col.bg.replace('50', '200')} rounded-2xl p-3 flex-1 min-w-[260px] max-w-[320px] flex flex-col h-full max-h-full`}>
+            <div 
+              key={col.id} 
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, col.id)}
+              className={`${col.bg} border ${col.bg.replace('50', '200')} rounded-2xl p-3 flex-1 min-w-[260px] max-w-[320px] flex flex-col h-full max-h-full transition-colors`}
+            >
               <div className="flex justify-between items-center mb-3 px-1 shrink-0">
                 <h3 className={`font-bold text-sm ${col.text}`}>{col.title}</h3>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white bg-opacity-60 text-gray-600">
@@ -184,7 +229,13 @@ export default function Tasks() {
                 {tasksInCol.map(task => {
                   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
                   return (
-                    <Link key={task.id} to={`/tasks/${task.id}`} className="bg-white p-3 rounded-xl shadow-sm hover:shadow-md border border-gray-100 transition block shrink-0">
+                    <div 
+                      key={task.id} 
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      onClick={() => navigate(`/tasks/${task.id}`)}
+                      className="bg-white p-3 rounded-xl shadow-sm hover:shadow-md border border-gray-100 transition block shrink-0 cursor-grab active:cursor-grabbing"
+                    >
                       <div className="flex justify-between items-start mb-2">
                         <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-600' : 'text-gray-400'}`}>
                           {isOverdue ? '⚠️ ' : '⏳ '} {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
@@ -206,7 +257,7 @@ export default function Tasks() {
                         </div>
                         {task.revision_count > 0 && <span className="text-[9px] text-red-500 font-bold bg-red-50 px-1.5 rounded">В: {task.revision_count}</span>}
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
                 
@@ -216,7 +267,9 @@ export default function Tasks() {
                   </div>
                 )}
                 {totalTasks === 0 && (
-                  <div className="text-center text-gray-400 text-xs mt-4 py-4 shrink-0">Нет задач</div>
+                  <div className="text-center text-gray-400 text-xs mt-4 py-4 shrink-0 border-2 border-dashed border-gray-200 rounded-xl bg-white bg-opacity-40">
+                    Перетащите сюда
+                  </div>
                 )}
               </div>
             </div>
@@ -224,6 +277,7 @@ export default function Tasks() {
         })}
       </div>
 
+      {/* МОДАЛКА ОСТАЛАСЬ БЕЗ ИЗМЕНЕНИЙ */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">

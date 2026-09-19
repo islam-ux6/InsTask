@@ -10,19 +10,20 @@ from .serializers import TaskSerializer, TaskReportSerializer
 from .permissions import IsTaskParticipant, IsAssigneeForAccept 
 
 
-# --- БЕЗОПАСНАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ---
-# Теперь она жестко требует передать old_status, чтобы не было путаницы!
+# --- БЕЗОПАСНАЯ И БРОНЕБОЙНАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ---
 def transition_task_status(task, old_status, new_status):
-    if old_status == new_status:
+    if task.status == new_status:
         return
 
-    # 1. Останавливаем секундомер именно для СТАРОГО статуса
-    last_log = task.status_logs.filter(status=old_status, exited_at__isnull=True).last()
-    if last_log:
-        last_log.exited_at = timezone.now()
-        last_log.save(update_fields=['exited_at'])
+    # ИДЕМПОТЕНТНОСТЬ: Если последний лог уже с нужным статусом, игнорируем дубли
+    last_log = task.status_logs.order_by('-entered_at').first()
+    if last_log and last_log.status == new_status:
+        return
 
-    # 2. Обновляем задачу
+    # УБИЙЦА КЛОНОВ: Закрываем ВООБЩЕ ВСЕ открытые секундомеры у этой задачи!
+    task.status_logs.filter(exited_at__isnull=True).update(exited_at=timezone.now())
+
+    # Обновляем саму задачу
     task.status = new_status
     if new_status == Task.Status.REVISION:
         task.revision_count += 1
@@ -31,7 +32,7 @@ def transition_task_status(task, old_status, new_status):
     
     task.save()
 
-    # 3. Запускаем новый секундомер
+    # Запускаем один чистый секундомер
     TaskStatusLog.objects.create(task=task, status=new_status)
 
 
@@ -58,12 +59,11 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance = serializer.instance 
-        old_status = instance.status # ЗАПОМИНАЕМ СТАТУС ДО СОХРАНЕНИЯ!
+        old_status = instance.status 
         new_status = serializer.validated_data.get('status')
 
         if new_status and new_status != old_status:
             serializer.validated_data.pop('status')
-            # Передаем старый и новый статус явно
             transition_task_status(instance, old_status, new_status)
 
         serializer.save()
@@ -90,7 +90,7 @@ class TaskReportViewSet(viewsets.ModelViewSet):
     serializer_class = TaskReportSerializer
 
     def perform_create(self, serializer):
-        report = serializer.save()
+        report = serializer.save(author=self.request.user)
         task = report.task
 
         if task.status not in [Task.Status.COMPLETED, Task.Status.ON_REVIEW]:

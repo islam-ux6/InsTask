@@ -16,7 +16,10 @@ export default function TaskDetail() {
 
   const [comment, setComment] = useState('');
   const [file, setFile] = useState(null);
+  
   const [submittingReport, setSubmittingReport] = useState(false);
+  // НОВОЕ: Состояние загрузки для кнопок статуса
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   const fetchTaskData = async () => {
     try {
@@ -41,13 +44,19 @@ export default function TaskDetail() {
     fetchTaskData();
   }, [id]);
 
+  // ИСПРАВЛЕНИЕ: Блокируем множественные клики
   const handleStatusChange = async (newStatus) => {
+    if (isChangingStatus) return; // Если уже меняем, игнорируем клик
+    setIsChangingStatus(true);
+    
     try {
       await api.patch(`/tasks/${id}/`, { status: newStatus });
-      fetchTaskData();
+      await fetchTaskData(); // Обязательно ждем обновления данных
     } catch (error) {
       alert('Ошибка при изменении статуса');
       console.error(error);
+    } finally {
+      setIsChangingStatus(false); // Разблокируем кнопки
     }
   };
 
@@ -68,7 +77,7 @@ export default function TaskDetail() {
       
       setComment('');
       setFile(null);
-      fetchTaskData(); 
+      await fetchTaskData(); 
     } catch (error) {
       alert('Ошибка при отправке отчета');
       console.error(error);
@@ -129,22 +138,38 @@ export default function TaskDetail() {
         
         <div className="flex flex-col gap-2 min-w-[200px]">
           {task.status === 'created' && isAssignee && (
-            <button onClick={() => handleStatusChange('in_progress')} className="bg-blue-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-blue-700 transition">
-              Взять в работу
+            <button 
+              disabled={isChangingStatus}
+              onClick={() => handleStatusChange('in_progress')} 
+              className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+            >
+              {isChangingStatus ? 'Обработка...' : 'Взять в работу'}
             </button>
           )}
           {(task.status === 'in_progress' || task.status === 'revision') && isAssignee && (
-            <button onClick={() => handleStatusChange('on_review')} className="bg-yellow-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-yellow-600 transition">
-              Отправить на проверку
+            <button 
+              disabled={isChangingStatus}
+              onClick={() => handleStatusChange('on_review')} 
+              className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`}
+            >
+              {isChangingStatus ? 'Обработка...' : 'Отправить на проверку'}
             </button>
           )}
           
           {task.status === 'on_review' && isCreator && (
             <>
-              <button onClick={() => handleStatusChange('completed')} className="bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-700 transition">
+              <button 
+                disabled={isChangingStatus}
+                onClick={() => handleStatusChange('completed')} 
+                className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}
+              >
                 Принять (Завершить)
               </button>
-              <button onClick={() => handleStatusChange('revision')} className="bg-red-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-red-700 transition">
+              <button 
+                disabled={isChangingStatus}
+                onClick={() => handleStatusChange('revision')} 
+                className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white`}
+              >
                 Вернуть на доработку
               </button>
             </>
@@ -159,7 +184,6 @@ export default function TaskDetail() {
             <h3 className="font-bold text-gray-800 text-lg mb-1">Таймлайн задержек</h3>
             <p className="text-sm text-gray-500 mb-6">Время, проведенное задачей в каждом статусе (в часах)</p>
             
-            {/* ИСПРАВЛЕНИЕ: Теперь график показывается ВСЕГДА, если есть хотя бы 1 лог статуса (даже если прошло 0.0 часов) */}
             {task.status_logs && task.status_logs.length > 0 ? (
               <div className="w-full">
                 <ResponsiveContainer width="100%" height={100}>
@@ -176,7 +200,6 @@ export default function TaskDetail() {
                   </BarChart>
                 </ResponsiveContainer>
                 
-                {/* Текстовая расшифровка снизу */}
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-6">
                   <div className="text-center">
                     <p className="text-xs text-gray-400 font-bold uppercase">Ожидание</p>
@@ -201,6 +224,7 @@ export default function TaskDetail() {
             )}
           </div>
 
+          {/* ... (остальной код отчетов и информации без изменений) ... */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
               <h3 className="font-bold text-gray-800 text-lg">Отчеты и комментарии</h3>
