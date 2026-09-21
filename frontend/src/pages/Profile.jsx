@@ -6,6 +6,8 @@ export default function Profile() {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  // НОВОЕ: Нам нужно знать, кто смотрит профиль, чтобы проверять права
+  const [currentUser, setCurrentUser] = useState(null); 
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,19 +16,34 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState('tasks');
   const [taskFilter, setTaskFilter] = useState('all');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [weekParity, setWeekParity] = useState('odd');
+
+  // НОВОЕ: Состояния для модального окна выдачи наград/выговоров
+  const [showRecordModal, setShowRecordModal] = useState(false);
+  const [recordData, setRecordData] = useState({ record_type: 'reward', description: '' });
+  const [submittingRecord, setSubmittingRecord] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const userEndpoint = id ? `/users/${id}/` : '/users/me/';
-        const [userRes, tasksRes] = await Promise.all([
-          api.get(userEndpoint),
+        // НОВОЕ: Грузим данные текущего пользователя И задачи одним махом
+        const [meRes, tasksRes] = await Promise.all([
+          api.get('/users/me/'),
           api.get('/tasks/')
         ]);
         
-        setUser(userRes.data);
-        const targetUserId = userRes.data.id;
+        setCurrentUser(meRes.data);
+        
+        // НОВОЕ: Если передан ID, грузим чужой профиль. Иначе - свой.
+        let profileData = meRes.data;
+        if (id) {
+          const userRes = await api.get(`/users/${id}/`);
+          profileData = userRes.data;
+        }
+        setUser(profileData);
+        
+        const targetUserId = profileData.id;
         const myAssignedTasks = tasksRes.data.filter(task => 
           task.assignees.some(assignee => assignee.id === targetUserId)
         );
@@ -42,21 +59,44 @@ export default function Profile() {
     fetchData();
   }, [id]);
 
+  // НОВОЕ: Функция отправки награды/выговора на бэкенд
+  const handleCreateRecord = async (e) => {
+    e.preventDefault();
+    setSubmittingRecord(true);
+    try {
+      await api.post('/records/', {
+        user: user.id,
+        record_type: recordData.record_type,
+        description: recordData.description
+      });
+      
+      setShowRecordModal(false);
+      setRecordData({ record_type: 'reward', description: '' });
+      
+      // Обновляем данные пользователя, чтобы сразу увидеть свежую запись
+      const updatedUserRes = await api.get(`/users/${user.id}/`);
+      setUser(updatedUserRes.data);
+    } catch (error) {
+      alert('Ошибка при сохранении записи. Проверьте права доступа.');
+      console.error(error);
+    } finally {
+      setSubmittingRecord(false);
+    }
+  };
+
   if (loading) return <div className="text-gray-500 p-8 flex justify-center mt-10">Загрузка профиля...</div>;
   if (error) return <div className="text-red-500 p-8 text-center bg-red-50 rounded-lg mx-auto max-w-lg mt-10">{error}</div>;
-  if (!user) return <div className="text-red-500 p-8">Ошибка загрузки</div>;
+  // НОВОЕ: Проверяем, что загрузился и профиль, и данные смотрящего
+  if (!user || !currentUser) return <div className="text-red-500 p-8">Ошибка загрузки</div>;
 
   const rewards = user.records?.filter(r => r.record_type === 'reward') || [];
   const reprimands = user.records?.filter(r => r.record_type === 'reprimand') || [];
-
-  const displayedTasks = tasks.filter(task => {
-    if (taskFilter === 'all') return true;
-    return task.status === taskFilter;
-  });
-
   const isMyProfile = !id;
 
-  // === ЛОГИКА КАЛЕНДАРЯ ===
+  // НОВОЕ: Права на выдачу записей (Я - начальник, и это чужой профиль)
+  const canIssueRecords = (currentUser.is_manager || currentUser.is_rectorate) && !isMyProfile;
+
+  // === ЛОГИКА КАЛЕНДАРЯ ПОСЕЩАЕМОСТИ ===
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -67,37 +107,23 @@ export default function Profile() {
   const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
   const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
-  // Хелпер для форматирования даты в "YYYY-MM-DD"
-  const formatDate = (y, m, d) => {
-    return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  };
+  const formatDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-  // === РЕАЛЬНЫЕ ДАННЫЕ С БЭКЕНДА ===
   const getDayStatus = (day) => {
     const dateStr = formatDate(year, month, day);
-    const today = new Date();
-    const todayStr = formatDate(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayStr = formatDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
-    // 1. Выходные всегда серые
     const dayOfWeek = new Date(year, month, day).getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend';
-
-    // 2. Дни в будущем - пустые
     if (dateStr > todayStr) return 'future';
 
-    // 3. Проверяем историю из базы данных
     if (user.attendance_history && user.attendance_history[dateStr]) {
       const status = user.attendance_history[dateStr].toLowerCase();
       if (status === 'on_time' || status === 'ontime') return 'ontime';
       if (status === 'late') return 'late';
     }
 
-    // 4. Если сегодня записей нет, но человек в отпуске
-    if (dateStr === todayStr && user.work_status !== 'working') {
-      return 'vacation';
-    }
-
-    // 5. Если записей нет (прогул или система еще не работала)
+    if (dateStr === todayStr && user.work_status !== 'working') return 'vacation';
     return 'empty'; 
   };
 
@@ -111,10 +137,15 @@ export default function Profile() {
       case 'vacation': return base + "bg-blue-100 text-blue-700 border-blue-200 shadow-sm";
       case 'future': return base + "bg-white text-gray-300 border-gray-100";
       case 'weekend': return base + "bg-gray-50 text-gray-400 border-transparent";
-      case 'empty': return base + "bg-white text-gray-400 border-gray-100"; // Нет данных
+      case 'empty': return base + "bg-white text-gray-400 border-gray-100"; 
       default: return base + "bg-white border-transparent";
     }
   };
+
+  const displayedTasks = tasks.filter(task => taskFilter === 'all' ? true : task.status === taskFilter);
+  const scheduleData = user.schedule || { odd: {}, even: {} };
+  const daysOfWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const currentSchedule = scheduleData[weekParity] || {};
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-10">
@@ -156,15 +187,25 @@ export default function Profile() {
                 </div>
               )}
             </div>
+
+            {/* НОВОЕ: Кнопка выдачи записи */}
+            {canIssueRecords && (
+              <button 
+                onClick={() => setShowRecordModal(true)}
+                className="w-full mt-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2.5 rounded-xl font-bold text-sm hover:shadow-lg transition-all"
+              >
+                + Достижение / Выговор
+              </button>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">Текущее состояние</h3>
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-gray-500 mb-1">Присутствие</p>
+                <p className="text-xs text-gray-500 mb-1">Статус в штате</p>
                 <p className={`font-semibold ${user.work_status === 'working' ? 'text-green-600' : 'text-orange-500'}`}>
-                  {user.work_status === 'working' ? 'На работе' : user.work_status_display || 'Неизвестно'}
+                  {user.work_status === 'working' ? 'Активен' : user.work_status_display || 'Неизвестно'}
                 </p>
               </div>
               <div>
@@ -178,15 +219,36 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* КОМПАКТНЫЙ КАЛЕНДАРЬ */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">Контактная информация</h3>
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Телефон</p>
+                {user.phone ? (
+                  <a href={`tel:${user.phone}`} className="font-medium text-blue-600 hover:underline">{user.phone}</a>
+                ) : <p className="font-medium text-gray-400">Не указан</p>}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Email</p>
+                {user.email ? (
+                  <a href={`mailto:${user.email}`} className="font-medium text-blue-600 hover:underline">{user.email}</a>
+                ) : <p className="font-medium text-gray-400">Не указан</p>}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Дата трудоустройства</p>
+                <p className="font-medium text-gray-800">
+                  {user.employment_date ? new Date(user.employment_date).toLocaleDateString('ru-RU') : 'Не указана'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-gray-800 text-sm">Посещаемость</h3>
               <div className="flex space-x-2">
                 <button onClick={prevMonth} className="text-gray-400 hover:text-gray-800 font-bold px-2 rounded hover:bg-gray-100">&lt;</button>
-                <span className="text-sm font-semibold text-gray-700 w-20 text-center">
-                  {monthNames[month]} {year}
-                </span>
+                <span className="text-sm font-semibold text-gray-700 w-20 text-center">{monthNames[month]} {year}</span>
                 <button onClick={nextMonth} className="text-gray-400 hover:text-gray-800 font-bold px-2 rounded hover:bg-gray-100">&gt;</button>
               </div>
             </div>
@@ -201,11 +263,7 @@ export default function Profile() {
               {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
                 <div key={day} className="text-[10px] font-bold text-gray-400 mb-1">{day}</div>
               ))}
-              
-              {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                <div key={`empty-${i}`} className="h-8"></div>
-              ))}
-              
+              {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} className="h-8"></div>)}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1;
                 const status = getDayStatus(day);
@@ -230,45 +288,69 @@ export default function Profile() {
         <div className="lg:col-span-2 flex flex-col space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-[500px]">
             <div className="flex border-b border-gray-100 px-2 overflow-x-auto">
-              <button onClick={() => setActiveTab('tasks')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}>
-                Задания ({tasks.length})
-              </button>
-              <button onClick={() => setActiveTab('rewards')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'rewards' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:bg-gray-50'}`}>
-                Достижения ({rewards.length})
-              </button>
-              <button onClick={() => setActiveTab('reprimands')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'reprimands' ? 'border-b-2 border-red-600 text-red-600' : 'text-gray-500 hover:bg-gray-50'}`}>
-                Выговоры ({reprimands.length})
-              </button>
+              <button onClick={() => setActiveTab('tasks')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}>Задания ({tasks.length})</button>
+              <button onClick={() => setActiveTab('schedule')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'}`}>Расписание пар</button>
+              <button onClick={() => setActiveTab('rewards')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'rewards' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:bg-gray-50'}`}>Достижения ({rewards.length})</button>
+              <button onClick={() => setActiveTab('reprimands')} className={`px-6 py-4 text-sm font-bold transition-colors whitespace-nowrap ${activeTab === 'reprimands' ? 'border-b-2 border-red-600 text-red-600' : 'text-gray-500 hover:bg-gray-50'}`}>Выговоры ({reprimands.length})</button>
             </div>
 
             <div className="p-6 flex-1 flex flex-col">
+              {/* === КОНТЕНТ ВКЛАДКИ РАСПИСАНИЯ === */}
+              {activeTab === 'schedule' && (
+                <div className="flex flex-col h-full animate-fade-in">
+                  <div className="flex justify-center mb-6">
+                    <div className="bg-gray-100 p-1 rounded-xl flex gap-1 shadow-inner">
+                      <button onClick={() => setWeekParity('odd')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'odd' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>Нечетная неделя (1)</button>
+                      <button onClick={() => setWeekParity('even')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'even' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>Четная неделя (2)</button>
+                    </div>
+                  </div>
+                  <div className="space-y-6 overflow-y-auto max-h-[600px] pr-2">
+                    {daysOfWeek.map(day => {
+                      const dayClasses = currentSchedule[day];
+                      if (!dayClasses || dayClasses.length === 0) return null;
+                      return (
+                        <div key={day} className="border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200"><h4 className="font-bold text-gray-800">{day}</h4></div>
+                          <div className="divide-y divide-gray-100">
+                            {dayClasses.map((cls, idx) => (
+                              <div key={idx} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50 transition-colors">
+                                <div className="min-w-[120px]"><span className="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-lg text-sm border border-indigo-100">{cls.time}</span></div>
+                                <div className="flex-1">
+                                  <p className="font-bold text-gray-800">{cls.name}</p>
+                                  <div className="flex flex-wrap gap-3 mt-1 text-xs font-medium text-gray-500">
+                                    <span className="flex items-center gap-1">🏷️ {cls.type}</span><span className="flex items-center gap-1">👥 {cls.group}</span><span className="flex items-center gap-1">📍 {cls.room}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {daysOfWeek.every(day => !currentSchedule[day] || currentSchedule[day].length === 0) && <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-200 rounded-xl">На эту неделю пар не назначено.</div>}
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'tasks' && (
                 <div className="flex flex-col h-full">
                   <div className="flex flex-wrap gap-2 mb-6">
-                    <button onClick={() => setTaskFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Все</button>
-                    <button onClick={() => setTaskFilter('created')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'created' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Созданы</button>
-                    <button onClick={() => setTaskFilter('in_progress')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'in_progress' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>В работе</button>
-                    <button onClick={() => setTaskFilter('revision')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'revision' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>На доработке</button>
-                    <button onClick={() => setTaskFilter('on_review')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'on_review' ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}>На проверке</button>
-                    <button onClick={() => setTaskFilter('completed')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === 'completed' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>Завершено</button>
+                    {['all', 'created', 'in_progress', 'revision', 'on_review', 'completed'].map(f => (
+                      <button key={f} onClick={() => setTaskFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === f ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {f === 'all' ? 'Все' : f === 'created' ? 'Созданы' : f === 'in_progress' ? 'В работе' : f === 'revision' ? 'На доработке' : f === 'on_review' ? 'На проверке' : 'Завершено'}
+                      </button>
+                    ))}
                   </div>
-
                   <div className="space-y-3 overflow-y-auto pr-2 max-h-[500px]">
                     {displayedTasks.length > 0 ? displayedTasks.map(task => (
                       <div key={task.id} onClick={() => navigate(`/tasks/${task.id}`)} className="p-4 border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-300 transition cursor-pointer group bg-white flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{task.title}</h4>
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-bold whitespace-nowrap ${task.status === 'completed' ? 'bg-green-100 text-green-700' : task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : task.status === 'on_review' ? 'bg-yellow-100 text-yellow-700' : task.status === 'revision' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                            {task.status_display}
-                          </span>
+                          <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-gray-100 text-gray-700">{task.status_display}</span>
                         </div>
                         <p className="text-sm text-gray-500 line-clamp-2">{task.description}</p>
                       </div>
-                    )) : (
-                      <div className="text-center text-gray-400 py-10 border-2 border-dashed border-gray-100 rounded-xl">
-                        Задач с таким статусом не найдено.
-                      </div>
-                    )}
+                    )) : <div className="text-center text-gray-400 py-10 border-2 border-dashed border-gray-100 rounded-xl">Задач с таким статусом не найдено.</div>}
                   </div>
                 </div>
               )}
@@ -300,6 +382,55 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* НОВОЕ: МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ЗАПИСИ */}
+      {showRecordModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-fade-in">
+            <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 text-lg">Запись в личное дело</h3>
+              <button onClick={() => setShowRecordModal(false)} className="text-gray-400 hover:text-gray-800 text-2xl leading-none">&times;</button>
+            </div>
+            
+            <form onSubmit={handleCreateRecord} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Тип записи</label>
+                <select 
+                  value={recordData.record_type} 
+                  onChange={(e) => setRecordData({...recordData, record_type: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                >
+                  <option value="reward">🏆 Достижение (Награда)</option>
+                  <option value="reprimand">⚠️ Выговор (Замечание)</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Причина (описание)</label>
+                <textarea 
+                  required
+                  rows="4" 
+                  placeholder="Например: За отличную организацию конференции..."
+                  value={recordData.description} 
+                  onChange={(e) => setRecordData({...recordData, description: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
+                ></textarea>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  disabled={submittingRecord}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:bg-indigo-300 transition-colors shadow-md"
+                >
+                  {submittingRecord ? 'Сохранение...' : 'Выдать запись'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

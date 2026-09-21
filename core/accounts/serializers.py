@@ -11,7 +11,7 @@ class EmployeeRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmployeeRecord
-        fields = ['id', 'record_type', 'record_type_display', 'description', 'author_name', 'created_at']
+        fields = ['id', 'user', 'record_type', 'record_type_display', 'description', 'author_name', 'created_at']
 
     def get_author_name(self, obj):
         if obj.author:
@@ -27,6 +27,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     work_status_display = serializers.CharField(source='get_work_status_display', read_only=True)
     records = EmployeeRecordSerializer(many=True, read_only=True)
     attendance_history = serializers.SerializerMethodField()
+    schedule = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -41,12 +42,42 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_manager', 'is_rectorate',
             'records',
             'work_status', 'work_status_display',
-            'attendance_history'
+            'attendance_history',
+            'schedule'
         ]
         read_only_fields = ['is_manager', 'is_rectorate']
 
     def get_attendance_history(self, obj):
-        # Собираем все записи посещаемости этого пользователя
         records = DailyAttendance.objects.filter(user=obj)
-        # Возвращаем в виде удобного словаря: {'2023-10-25': 'on_time', ...}
         return {str(record.date): record.status for record in records}
+
+    def get_schedule(self, obj):
+        # 1. Создаем пустой шаблон (точно такой, как ждет React)
+        days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
+        schedule_data = {
+            'odd': {day: [] for day in days},
+            'even': {day: [] for day in days}
+        }
+
+        # 2. Получаем все пары преподавателя из базы
+        # (Используем prefetch_related во views, чтобы избежать N+1 проблемы)
+        items = obj.schedule_items.all()
+
+        # 3. Раскладываем пары по полочкам
+        for item in items:
+            entry = {
+                'time': item.time_slot,
+                'name': item.subject_name,
+                'type': item.class_type,
+                'room': item.room,
+                'group': item.group
+            }
+
+            # Если пара проходит каждую неделю - добавляем в обе ветки
+            if item.week_type in ['odd', 'both']:
+                schedule_data['odd'][item.day_of_week].append(entry)
+            
+            if item.week_type in ['even', 'both']:
+                schedule_data['even'][item.day_of_week].append(entry)
+
+        return schedule_data

@@ -91,3 +91,41 @@ class DailyAttendance(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.date} ({self.get_status_display()})"
+
+
+class ScheduleItem(models.Model):
+    WEEK_CHOICES = (
+        ('odd', 'Нечетная неделя (1)'),
+        ('even', 'Четная неделя (2)'),
+        ('both', 'Каждую неделю'),
+    )
+    
+    DAY_CHOICES = (
+        ('Понедельник', 'Понедельник'),
+        ('Вторник', 'Вторник'),
+        ('Среда', 'Среда'),
+        ('Четверг', 'Четверг'),
+        ('Пятница', 'Пятница'),
+        ('Суббота', 'Суббота'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='schedule_items', verbose_name="Преподаватель")
+    week_type = models.CharField(max_length=10, choices=WEEK_CHOICES, default='both', verbose_name="Тип недели")
+    day_of_week = models.CharField(max_length=15, choices=DAY_CHOICES, verbose_name="День недели")
+    
+    # Для простоты пока используем строку времени, чтобы точно совпадало с фронтендом
+    time_slot = models.CharField(max_length=20, verbose_name="Время (например, 08:30 - 10:00)")
+    
+    subject_name = models.CharField(max_length=100, verbose_name="Дисциплина")
+    class_type = models.CharField(max_length=50, verbose_name="Тип (Лекция, Практика, Лаба...)")
+    room = models.CharField(max_length=50, verbose_name="Аудитория")
+    group = models.CharField(max_length=50, verbose_name="Группа")
+
+    class Meta:
+        verbose_name = "Занятие"
+        verbose_name_plural = "Расписание преподавателей"
+        # Сортируем пары по времени
+        ordering = ['time_slot']
+
+    def __str__(self):
+        return f"{self.user.last_name} - {self.day_of_week} ({self.time_slot})"

@@ -1,31 +1,31 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, EmployeeRecord, DailyAttendance
+from .models import User, EmployeeRecord, DailyAttendance, ScheduleItem
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    # Обновили колонки, которые выводятся в списке пользователей
-    list_display = ['username', 'last_name', 'first_name', 'position', 'teaching_status', 'department', 'working_hours']
+    # ИСПРАВЛЕНИЕ: Добавили 'work_status' в список колонок
+    list_display = ['username', 'last_name', 'first_name', 'position', 'teaching_status', 'department', 'working_hours', 'work_status']
     
-    # Обновили панель фильтров справа
-    list_filter = ['position', 'teaching_status', 'academic_degree', 'department', 'working_hours', 'is_staff']
+    # ИСПРАВЛЕНИЕ: Добавили 'work_status' в фильтры справа (чтобы быстро найти всех, кто в отпуске)
+    list_filter = ['work_status', 'position', 'teaching_status', 'academic_degree', 'department', 'working_hours', 'is_staff']
     
-    # Добавили новые поля в форму редактирования пользователя
+    # ИСПРАВЛЕНИЕ: Добавили 'work_status' в форму редактирования
     fieldsets = UserAdmin.fieldsets + (
         ('Университетские данные', {
             'fields': (
                 'position', 'teaching_status', 'academic_degree', 
-                'department', 'working_hours', 'phone', 'employment_date'
+                'department', 'working_hours', 'phone', 'employment_date', 'work_status'
             )
         }),
     )
     
-    # Добавили новые поля в форму создания пользователя
+    # ИСПРАВЛЕНИЕ: Добавили 'work_status' в форму создания нового пользователя
     add_fieldsets = UserAdmin.add_fieldsets + (
         ('Университетские данные', {
             'fields': (
                 'position', 'teaching_status', 'academic_degree', 
-                'department', 'working_hours', 'phone', 'employment_date'
+                'department', 'working_hours', 'phone', 'employment_date', 'work_status'
             )
         }),
     )
@@ -63,3 +63,6 @@ class DailyAttendanceAdmin(admin.ModelAdmin):
     
     # Сортировка по умолчанию: сначала самые свежие записи
     ordering = ['-date', '-arrival_time']
+
+
+admin.site.register(ScheduleItem)

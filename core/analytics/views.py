@@ -33,7 +33,7 @@ class DashboardAnalyticsView(APIView):
             scope = "personal"
 
         def get_cycle_time(log_qs):
-            logs = list(log_qs.filter(exited_at__isnull=False))
+            logs = list(log_qs)
             def avg_hours(status_name):
                 st_logs = [l for l in logs if l.status == status_name]
                 return round(sum(l.hours_spent for l in st_logs) / len(st_logs), 1) if st_logs else 0

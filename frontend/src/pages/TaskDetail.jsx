@@ -18,7 +18,6 @@ export default function TaskDetail() {
   const [file, setFile] = useState(null);
   
   const [submittingReport, setSubmittingReport] = useState(false);
-  // НОВОЕ: Состояние загрузки для кнопок статуса
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   const fetchTaskData = async () => {
@@ -44,19 +43,18 @@ export default function TaskDetail() {
     fetchTaskData();
   }, [id]);
 
-  // ИСПРАВЛЕНИЕ: Блокируем множественные клики
   const handleStatusChange = async (newStatus) => {
-    if (isChangingStatus) return; // Если уже меняем, игнорируем клик
+    if (isChangingStatus) return; 
     setIsChangingStatus(true);
     
     try {
       await api.patch(`/tasks/${id}/`, { status: newStatus });
-      await fetchTaskData(); // Обязательно ждем обновления данных
+      await fetchTaskData(); 
     } catch (error) {
       alert('Ошибка при изменении статуса');
       console.error(error);
     } finally {
-      setIsChangingStatus(false); // Разблокируем кнопки
+      setIsChangingStatus(false); 
     }
   };
 
@@ -83,6 +81,30 @@ export default function TaskDetail() {
       console.error(error);
     } finally {
       setSubmittingReport(false);
+    }
+  };
+
+  // === НОВАЯ ФУНКЦИЯ ДЛЯ СКАЧИВАНИЯ ФАЙЛОВ ===
+  const handleDownload = async (e, fileUrl) => {
+    e.preventDefault(); 
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      
+      const fileName = fileUrl.split('/').pop() || 'отчет_к_задаче';
+      link.download = decodeURIComponent(fileName);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Ошибка при скачивании файла:', error);
+      window.open(fileUrl, '_blank');
     }
   };
 
@@ -224,7 +246,6 @@ export default function TaskDetail() {
             )}
           </div>
 
-          {/* ... (остальной код отчетов и информации без изменений) ... */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
               <h3 className="font-bold text-gray-800 text-lg">Отчеты и комментарии</h3>
@@ -273,15 +294,19 @@ export default function TaskDetail() {
                       <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString('ru-RU')}</span>
                     </div>
                     <p className="text-gray-700 text-sm whitespace-pre-wrap">{rep.comment}</p>
+                    
+                    {/* ИСПРАВЛЕНИЕ: Заменили тег <a> на <button> с функцией скачивания */}
                     {rep.attached_file && (
-                      <a 
-                        href={rep.attached_file} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="inline-block mt-3 text-sm text-blue-600 hover:underline font-medium bg-blue-50 px-3 py-1.5 rounded-lg"
-                      >
-                        📎 Скачать прикрепленный файл
-                      </a>
+                      <div className="mt-3">
+                        <button 
+                          type="button"
+                          onClick={(e) => handleDownload(e, rep.attached_file)}
+                          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-100 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-left"
+                        >
+                          <span>📎</span> 
+                          <span>Скачать прикрепленный файл</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
