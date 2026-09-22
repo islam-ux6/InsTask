@@ -1,0 +1,221 @@
+{
+  "menu": {
+    "home": "Главная",
+    "tasks": "Задачи",
+    "departments": "Кафедры",
+    "profile": "Мой профиль",
+    "logout": "Выйти"
+  },
+  "dashboard": {
+    "welcome": "С возвращением",
+    "panel_institute": "Панель управления институтом",
+    "panel_department": "Панель управления кафедрой",
+    "panel_teacher": "Панель управления преподавателя",
+    "your_quality": "Ваше качество работ",
+    "completion_rate": "Выполнение в срок",
+    "lates_today": "Опоздания (сегодня)",
+    "people": "чел.",
+    "staff_online": "Штат онлайн",
+    "productivity_center": "Центр продуктивности",
+    "personal_productivity": "Личная продуктивность",
+    "filters": {
+      "departments": "Кафедры",
+      "delays_dept": "Задержки (Каф.)",
+      "employees": "Сотрудники",
+      "delays_emp": "Задержки (Сотр.)",
+      "revisions": "Доработки",
+      "burnout": "Выгорание",
+      "select_dept": "Сотрудники кафедры...",
+      "select_emp": "Детально по сотруднику..."
+    },
+    "charts": {
+      "completed_on_time": "Выполнено в срок (%)",
+      "average_quality": "Среднее качество (1-5)",
+      "task_completion": "Выполнение задач (%)",
+      "quality": "Качество (1-5)",
+      "where_stuck": "Где застревают задачи?",
+      "in_progress_hours": "В работе (часы)",
+      "on_review_hours": "На проверке (часы)",
+      "revision_hours": "На доработке (часы)",
+      "burnout_risk": "Риск выгорания (Активные задачи)",
+      "active_tasks": "Активных задач",
+      "revisions_freq": "Частота доработок по сотрудникам",
+      "first_try": "С 1-го раза",
+      "one_revision": "1 доработка",
+      "multiple_revisions": "2 и более",
+      "detailed_profile": "Детальный профиль продуктивности",
+      "task_funnel": "Воронка задач",
+      "funnel": {
+        "created": "Созданы",
+        "in_progress": "В работе",
+        "revision": "Доработка",
+        "on_review": "На проверке",
+        "completed": "Завершено"
+      },
+      "radar": {
+        "title": "Комплексный профиль",
+        "quality": "Качество",
+        "discipline": "Дисциплина",
+        "autonomy": "Автономность",
+        "speed": "Скорость",
+        "volume": "Объем"
+      },
+      "no_data": "Нет данных",
+      "select_employee_prompt": "Выберите сотрудника для анализа"
+    }
+  },
+  "profile": {
+    "my_profile": "Мой профиль",
+    "personnel_file": "Личное дело:",
+    "teacher": "Преподаватель",
+    "current_status": "Текущее состояние",
+    "work_status": "Статус в штате",
+    "active": "Активен",
+    "unknown": "Неизвестно",
+    "department": "Кафедра",
+    "not_specified": "Не указана",
+    "working_hours": "Рабочие часы",
+    "contact_info": "Контактная информация",
+    "phone": "Телефон",
+    "email": "Email",
+    "employment_date": "Дата трудоустройства",
+    "issue_record": "Достижение / Выговор",
+    "attendance": "Посещаемость",
+    "on_time": "Вовремя",
+    "late": "Опоздал",
+    "no_data": "Нет данных",
+    "tabs": {
+      "tasks": "Задания",
+      "schedule": "Расписание пар",
+      "rewards": "Достижения",
+      "reprimands": "Выговоры"
+    },
+    "schedule": {
+      "odd_week": "Нечетная неделя (1)",
+      "even_week": "Четная неделя (2)",
+      "empty": "На эту неделю пар не назначено."
+    },
+    "records": {
+      "empty_rewards": "Наград пока нет.",
+      "empty_reprimands": "Отлично! Выговоров нет.",
+      "issued": "Выдано:",
+      "author": "Автор:"
+    },
+    "modal": {
+      "title": "Запись в личное дело",
+      "type": "Тип записи",
+      "reward": "Достижение (Награда)",
+      "reprimand": "Выговор (Замечание)",
+      "reason": "Причина (описание)",
+      "placeholder": "Например: За отличную организацию конференции...",
+      "save": "Сохранение...",
+      "submit": "Выдать запись"
+    },
+    "positions": {
+      "rector": "Ректор",
+      "vice_rector_academic": "Проректор по учебной работе",
+      "vice_rector_science": "Проректор по научной работе",
+      "dean": "Декан",
+      "head_of_department": "Заведующий кафедрой",
+      "none": "Нет административной должности"
+    }
+  },
+  "tasks": {
+    "loading": "Загрузка доски...",
+    "title": "Менеджер задач",
+    "tabs": {
+      "my_tasks": "Мои задачи",
+      "delegated": "Я поставил",
+      "dept_all": "Все задачи кафедры",
+      "all": "Все задачи института"
+    },
+    "filters": {
+      "creator_all": "Постановщик: Все",
+      "assignee_all": "Исполнитель: Все",
+      "dept_all": "Кафедра: Все"
+    },
+    "create_btn": "Создать задачу",
+    "columns": {
+      "created": "Созданы",
+      "in_progress": "В работе",
+      "on_review": "На проверке",
+      "revision": "Доработка",
+      "completed": "Завершены"
+    },
+    "status": {
+      "created": "Создана",
+      "in_progress": "В работе",
+      "on_review": "На проверке",
+      "revision": "На доработке",
+      "completed": "Завершена"
+    },
+    "card": {
+      "creator": "Постановщик",
+      "department": "Кафедра",
+      "revisions": "В:"
+    },
+    "board": {
+      "showing_last": "Показаны последние",
+      "out_of": "из",
+      "drop_here": "Перетащите сюда"
+    },
+    "modal": {
+      "title": "Новая задача",
+      "error_assignee": "Обязательно выберите Исполнителя или Целевую кафедру!",
+      "error_create": "Ошибка при создании задачи.",
+      "name_label": "Название *",
+      "desc_label": "Описание *",
+      "deadline_label": "Дедлайн *",
+      "assignees_label": "Исполнители",
+      "target_dept_label": "Целевые кафедры",
+      "cancel": "Отмена",
+      "create": "Создать"
+    },
+    "errors": {
+      "status_change": "Ошибка при изменении статуса. Возможно, у вас нет прав на это действие."
+    }
+  },
+  "task_detail": {
+    "loading": "Загрузка задачи...",
+    "not_found": "Задача не найдена",
+    "back": "Назад",
+    "overdue": "ПРОСРОЧЕНО",
+    "actions": {
+      "processing": "Обработка...",
+      "take_in_progress": "Взять в работу",
+      "send_to_review": "Отправить на проверку",
+      "accept": "Принять (Завершить)",
+      "return_revision": "Вернуть на доработку"
+    },
+    "timeline": {
+      "title": "Таймлайн задержек",
+      "subtitle": "Время, проведенное задачей в каждом статусе (в часах)",
+      "no_data": "Нет данных о смене статусов...",
+      "wait": "Ожидание",
+      "in_progress": "В работе",
+      "review": "Проверка",
+      "revision": "Доработка",
+      "hours": "ч."
+    },
+    "reports": {
+      "title": "Отчеты и комментарии",
+      "placeholder": "Напишите комментарий или прикрепите отчет...",
+      "submitting": "Отправка...",
+      "submit_btn": "Оставить отчет",
+      "download_file": "Скачать прикрепленный файл",
+      "employee": "Сотрудник",
+      "empty": "Отчетов пока нет"
+    },
+    "info": {
+      "title": "Информация",
+      "deadline": "Дедлайн",
+      "created_at": "Создана",
+      "creator": "Постановщик",
+      "revision_count": "Доработок",
+      "quality": "Оценка качества",
+      "assignees_title": "Исполнители",
+      "no_assignees": "Не назначены",
+      "target_depts": "Целевые кафедры"
+    }
+  }
+}

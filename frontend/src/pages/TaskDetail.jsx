@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { useTranslation } from 'react-i18next';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer 
 } from 'recharts';
@@ -8,6 +9,7 @@ import {
 export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   
   const [currentUser, setCurrentUser] = useState(null);
   const [task, setTask] = useState(null);
@@ -51,7 +53,7 @@ export default function TaskDetail() {
       await api.patch(`/tasks/${id}/`, { status: newStatus });
       await fetchTaskData(); 
     } catch (error) {
-      alert('Ошибка при изменении статуса');
+      alert(t('tasks.errors.status_change'));
       console.error(error);
     } finally {
       setIsChangingStatus(false); 
@@ -84,7 +86,6 @@ export default function TaskDetail() {
     }
   };
 
-  // === НОВАЯ ФУНКЦИЯ ДЛЯ СКАЧИВАНИЯ ФАЙЛОВ ===
   const handleDownload = async (e, fileUrl) => {
     e.preventDefault(); 
     try {
@@ -95,7 +96,7 @@ export default function TaskDetail() {
       const link = document.createElement('a');
       link.href = downloadUrl;
       
-      const fileName = fileUrl.split('/').pop() || 'отчет_к_задаче';
+      const fileName = fileUrl.split('/').pop() || 'report';
       link.download = decodeURIComponent(fileName);
       
       document.body.appendChild(link);
@@ -108,8 +109,8 @@ export default function TaskDetail() {
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Загрузка задачи...</div>;
-  if (!task || !currentUser) return <div className="text-center text-gray-500 mt-20">Задача не найдена</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">{t('task_detail.loading')}</div>;
+  if (!task || !currentUser) return <div className="text-center text-gray-500 mt-20">{t('task_detail.not_found')}</div>;
 
   let timeMetrics = { created: 0, in_progress: 0, on_review: 0, revision: 0, completed: 0 };
   if (task.status_logs && task.status_logs.length > 0) {
@@ -120,11 +121,11 @@ export default function TaskDetail() {
   Object.keys(timeMetrics).forEach(key => timeMetrics[key] = parseFloat(timeMetrics[key].toFixed(1)));
 
   const timeData = [{
-    name: 'Часы',
-    'Создана': timeMetrics.created,
-    'В работе': timeMetrics.in_progress,
-    'На проверке': timeMetrics.on_review,
-    'На доработке': timeMetrics.revision,
+    name: 'Time',
+    [t('dashboard.charts.funnel.created')]: timeMetrics.created,
+    [t('dashboard.charts.funnel.in_progress')]: timeMetrics.in_progress,
+    [t('dashboard.charts.funnel.on_review')]: timeMetrics.on_review,
+    [t('dashboard.charts.funnel.revision')]: timeMetrics.revision,
   }];
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
@@ -135,7 +136,7 @@ export default function TaskDetail() {
     <div className="max-w-6xl mx-auto pb-10 space-y-6">
       <div className="mb-4">
         <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline text-sm font-medium">
-          &larr; Назад
+          &larr; {t('task_detail.back')}
         </button>
       </div>
 
@@ -148,10 +149,11 @@ export default function TaskDetail() {
               task.status === 'revision' ? 'bg-red-100 text-red-700' :
               'bg-yellow-100 text-yellow-700'
             }`}>
-              {task.status_display || task.status}
+              {/* ИСПРАВЛЕНО: ТЕПЕРЬ СТАТУС БЕРЕТСЯ ИЗ СЛОВАРЯ I18N */}
+              {t(`tasks.status.${task.status}`)}
             </span>
             {isOverdue && (
-              <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">ПРОСРОЧЕНО</span>
+              <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{t('task_detail.overdue')}</span>
             )}
           </div>
           <h1 className="text-3xl font-bold text-gray-800">{task.title}</h1>
@@ -165,7 +167,7 @@ export default function TaskDetail() {
               onClick={() => handleStatusChange('in_progress')} 
               className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
             >
-              {isChangingStatus ? 'Обработка...' : 'Взять в работу'}
+              {isChangingStatus ? t('task_detail.actions.processing') : t('task_detail.actions.take_in_progress')}
             </button>
           )}
           {(task.status === 'in_progress' || task.status === 'revision') && isAssignee && (
@@ -174,7 +176,7 @@ export default function TaskDetail() {
               onClick={() => handleStatusChange('on_review')} 
               className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`}
             >
-              {isChangingStatus ? 'Обработка...' : 'Отправить на проверку'}
+              {isChangingStatus ? t('task_detail.actions.processing') : t('task_detail.actions.send_to_review')}
             </button>
           )}
           
@@ -185,14 +187,14 @@ export default function TaskDetail() {
                 onClick={() => handleStatusChange('completed')} 
                 className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}
               >
-                Принять (Завершить)
+                {t('task_detail.actions.accept')}
               </button>
               <button 
                 disabled={isChangingStatus}
                 onClick={() => handleStatusChange('revision')} 
                 className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white`}
               >
-                Вернуть на доработку
+                {t('task_detail.actions.return_revision')}
               </button>
             </>
           )}
@@ -203,8 +205,8 @@ export default function TaskDetail() {
         
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-bold text-gray-800 text-lg mb-1">Таймлайн задержек</h3>
-            <p className="text-sm text-gray-500 mb-6">Время, проведенное задачей в каждом статусе (в часах)</p>
+            <h3 className="font-bold text-gray-800 text-lg mb-1">{t('task_detail.timeline.title')}</h3>
+            <p className="text-sm text-gray-500 mb-6">{t('task_detail.timeline.subtitle')}</p>
             
             {task.status_logs && task.status_logs.length > 0 ? (
               <div className="w-full">
@@ -215,40 +217,40 @@ export default function TaskDetail() {
                     <YAxis type="category" dataKey="name" hide />
                     <ChartTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px' }} />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '5px' }} />
-                    <Bar dataKey="Создана" stackId="a" fill="#9ca3af" name="Ожидание (ч)" />
-                    <Bar dataKey="В работе" stackId="a" fill="#3b82f6" name="В работе (ч)" />
-                    <Bar dataKey="На проверке" stackId="a" fill="#f59e0b" name="На проверке (ч)" />
-                    <Bar dataKey="На доработке" stackId="a" fill="#ef4444" name="На доработке (ч)" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey={t('dashboard.charts.funnel.created')} stackId="a" fill="#9ca3af" name={t('task_detail.timeline.wait')} />
+                    <Bar dataKey={t('dashboard.charts.funnel.in_progress')} stackId="a" fill="#3b82f6" name={t('task_detail.timeline.in_progress')} />
+                    <Bar dataKey={t('dashboard.charts.funnel.on_review')} stackId="a" fill="#f59e0b" name={t('task_detail.timeline.review')} />
+                    <Bar dataKey={t('dashboard.charts.funnel.revision')} stackId="a" fill="#ef4444" name={t('task_detail.timeline.revision')} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-6">
                   <div className="text-center">
-                    <p className="text-xs text-gray-400 font-bold uppercase">Ожидание</p>
-                    <p className="text-xl font-black text-gray-600">{timeMetrics.created} <span className="text-xs font-normal">ч.</span></p>
+                    <p className="text-xs text-gray-400 font-bold uppercase">{t('task_detail.timeline.wait')}</p>
+                    <p className="text-xl font-black text-gray-600">{timeMetrics.created} <span className="text-xs font-normal">{t('task_detail.timeline.hours')}</span></p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-blue-400 font-bold uppercase">В работе</p>
-                    <p className="text-xl font-black text-blue-600">{timeMetrics.in_progress} <span className="text-xs font-normal">ч.</span></p>
+                    <p className="text-xs text-blue-400 font-bold uppercase">{t('task_detail.timeline.in_progress')}</p>
+                    <p className="text-xl font-black text-blue-600">{timeMetrics.in_progress} <span className="text-xs font-normal">{t('task_detail.timeline.hours')}</span></p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-yellow-500 font-bold uppercase">Проверка</p>
-                    <p className="text-xl font-black text-yellow-600">{timeMetrics.on_review} <span className="text-xs font-normal">ч.</span></p>
+                    <p className="text-xs text-yellow-500 font-bold uppercase">{t('task_detail.timeline.review')}</p>
+                    <p className="text-xl font-black text-yellow-600">{timeMetrics.on_review} <span className="text-xs font-normal">{t('task_detail.timeline.hours')}</span></p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-red-400 font-bold uppercase">Доработка</p>
-                    <p className="text-xl font-black text-red-500">{timeMetrics.revision} <span className="text-xs font-normal">ч.</span></p>
+                    <p className="text-xs text-red-400 font-bold uppercase">{t('task_detail.timeline.revision')}</p>
+                    <p className="text-xl font-black text-red-500">{timeMetrics.revision} <span className="text-xs font-normal">{t('task_detail.timeline.hours')}</span></p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="text-center text-gray-400 py-6">Нет данных о смене статусов...</div>
+              <div className="text-center text-gray-400 py-6">{t('task_detail.timeline.no_data')}</div>
             )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-bold text-gray-800 text-lg">Отчеты и комментарии</h3>
+              <h3 className="font-bold text-gray-800 text-lg">{t('task_detail.reports.title')}</h3>
             </div>
             
             {(isAssignee || isCreator) && task.status !== 'completed' && (
@@ -259,7 +261,7 @@ export default function TaskDetail() {
                     required
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder="Напишите комментарий или прикрепите отчет..."
+                    placeholder={t('task_detail.reports.placeholder')}
                     className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
                   ></textarea>
                   <div className="flex justify-between items-center mt-3">
@@ -273,7 +275,7 @@ export default function TaskDetail() {
                       disabled={submittingReport}
                       className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:bg-blue-300 transition"
                     >
-                      {submittingReport ? 'Отправка...' : 'Оставить отчет'}
+                      {submittingReport ? t('task_detail.reports.submitting') : t('task_detail.reports.submit_btn')}
                     </button>
                   </div>
                 </form>
@@ -289,13 +291,12 @@ export default function TaskDetail() {
                   <div className="flex-1 bg-gray-50 p-4 rounded-xl rounded-tl-none border border-gray-100">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-bold text-gray-800">
-                        {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : 'Сотрудник'}
+                        {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : t('task_detail.reports.employee')}
                       </span>
                       <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString('ru-RU')}</span>
                     </div>
                     <p className="text-gray-700 text-sm whitespace-pre-wrap">{rep.comment}</p>
                     
-                    {/* ИСПРАВЛЕНИЕ: Заменили тег <a> на <button> с функцией скачивания */}
                     {rep.attached_file && (
                       <div className="mt-3">
                         <button 
@@ -303,15 +304,15 @@ export default function TaskDetail() {
                           onClick={(e) => handleDownload(e, rep.attached_file)}
                           className="inline-flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-100 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-left"
                         >
-                          <span>📎</span> 
-                          <span>Скачать прикрепленный файл</span>
+                          <span className="font-bold text-lg">📎</span> 
+                          <span>{t('task_detail.reports.download_file')}</span>
                         </button>
                       </div>
                     )}
                   </div>
                 </div>
               )) : (
-                <div className="text-center text-gray-400 py-4">Отчетов пока нет</div>
+                <div className="text-center text-gray-400 py-4">{t('task_detail.reports.empty')}</div>
               )}
             </div>
           </div>
@@ -319,31 +320,31 @@ export default function TaskDetail() {
 
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">Информация</h3>
+            <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">{t('task_detail.info.title')}</h3>
             <div className="space-y-4 text-sm">
               <div>
-                <p className="text-gray-400 font-medium mb-1">Дедлайн</p>
+                <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.deadline')}</p>
                 <p className={`font-bold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
                   {new Date(task.deadline).toLocaleString('ru-RU')}
                 </p>
               </div>
               <div>
-                <p className="text-gray-400 font-medium mb-1">Создана</p>
+                <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.created_at')}</p>
                 <p className="text-gray-800 font-medium">{new Date(task.created_at).toLocaleString('ru-RU')}</p>
               </div>
               <div>
-                <p className="text-gray-400 font-medium mb-1">Постановщик</p>
+                <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.creator')}</p>
                 <p className="text-gray-800 font-bold">
                   {task.creator?.last_name} {task.creator?.first_name}
                 </p>
               </div>
               <div>
-                <p className="text-gray-400 font-medium mb-1">Доработок</p>
+                <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.revision_count')}</p>
                 <p className="text-gray-800 font-medium">{task.revision_count}</p>
               </div>
               {task.quality_score && (
                 <div className="pt-2 border-t border-gray-100">
-                  <p className="text-gray-400 font-medium mb-1">Оценка качества</p>
+                  <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.quality')}</p>
                   <p className="text-blue-600 font-bold text-lg">★ {task.quality_score} / 5</p>
                 </div>
               )}
@@ -351,7 +352,7 @@ export default function TaskDetail() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">Исполнители</h3>
+            <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">{t('task_detail.info.assignees_title')}</h3>
             {task.assignees && task.assignees.length > 0 ? (
               <ul className="space-y-3">
                 {task.assignees.map(user => (
@@ -366,12 +367,12 @@ export default function TaskDetail() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-500">Не назначены</p>
+              <p className="text-sm text-gray-500">{t('task_detail.info.no_assignees')}</p>
             )}
 
             {task.target_departments && task.target_departments.length > 0 && (
               <div className="mt-6">
-                <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3 text-sm">Целевые кафедры</h4>
+                <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3 text-sm">{t('task_detail.info.target_depts')}</h4>
                 <ul className="space-y-2">
                   {task.target_departments.map(dept => (
                     <li key={dept.id} className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg">

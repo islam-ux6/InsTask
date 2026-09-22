@@ -1,0 +1,221 @@
+{
+  "menu": {
+    "home": "Dashboard",
+    "tasks": "Tasks",
+    "departments": "Departments",
+    "profile": "My Profile",
+    "logout": "Logout"
+  },
+  "dashboard": {
+    "welcome": "Welcome back",
+    "panel_institute": "Institute Dashboard",
+    "panel_department": "Department Dashboard",
+    "panel_teacher": "Teacher Dashboard",
+    "your_quality": "Your Work Quality",
+    "completion_rate": "On-Time Completion",
+    "lates_today": "Lates (Today)",
+    "people": "ppl",
+    "staff_online": "Staff Online",
+    "productivity_center": "Productivity Center",
+    "personal_productivity": "Personal Productivity",
+    "filters": {
+      "departments": "Departments",
+      "delays_dept": "Delays (Dept.)",
+      "employees": "Employees",
+      "delays_emp": "Delays (Emp.)",
+      "revisions": "Revisions",
+      "burnout": "Burnout",
+      "select_dept": "Department Employees...",
+      "select_emp": "Detailed Employee Profile..."
+    },
+    "charts": {
+      "completed_on_time": "Completed on time (%)",
+      "average_quality": "Average Quality (1-5)",
+      "task_completion": "Task Completion (%)",
+      "quality": "Quality (1-5)",
+      "where_stuck": "Where do tasks get stuck?",
+      "in_progress_hours": "In Progress (hours)",
+      "on_review_hours": "On Review (hours)",
+      "revision_hours": "Revision (hours)",
+      "burnout_risk": "Burnout Risk (Active Tasks)",
+      "active_tasks": "Active Tasks",
+      "revisions_freq": "Revision Frequency by Employee",
+      "first_try": "First Try",
+      "one_revision": "1 Revision",
+      "multiple_revisions": "2 or more",
+      "detailed_profile": "Detailed Productivity Profile",
+      "task_funnel": "Task Funnel",
+      "funnel": {
+        "created": "Created",
+        "in_progress": "In Progress",
+        "revision": "Revision",
+        "on_review": "On Review",
+        "completed": "Completed"
+      },
+      "radar": {
+        "title": "Comprehensive Profile",
+        "quality": "Quality",
+        "discipline": "Discipline",
+        "autonomy": "Autonomy",
+        "speed": "Speed",
+        "volume": "Volume"
+      },
+      "no_data": "No Data",
+      "select_employee_prompt": "Select an employee to analyze"
+    }
+  },
+  "profile": {
+    "my_profile": "My Profile",
+    "personnel_file": "Personnel File:",
+    "teacher": "Teacher",
+    "current_status": "Current Status",
+    "work_status": "Employment Status",
+    "active": "Active",
+    "unknown": "Unknown",
+    "department": "Department",
+    "not_specified": "Not specified",
+    "working_hours": "Working Hours",
+    "contact_info": "Contact Info",
+    "phone": "Phone",
+    "email": "Email",
+    "employment_date": "Hire Date",
+    "issue_record": "Achievement / Reprimand",
+    "attendance": "Attendance",
+    "on_time": "On Time",
+    "late": "Late",
+    "no_data": "No Data",
+    "tabs": {
+      "tasks": "Tasks",
+      "schedule": "Schedule",
+      "rewards": "Achievements",
+      "reprimands": "Reprimands"
+    },
+    "schedule": {
+      "odd_week": "Odd Week (1)",
+      "even_week": "Even Week (2)",
+      "empty": "No classes scheduled for this week."
+    },
+    "records": {
+      "empty_rewards": "No achievements yet.",
+      "empty_reprimands": "Great! No reprimands.",
+      "issued": "Issued:",
+      "author": "Author:"
+    },
+    "modal": {
+      "title": "Add Record to Personnel File",
+      "type": "Record Type",
+      "reward": "Achievement (Reward)",
+      "reprimand": "Reprimand (Warning)",
+      "reason": "Reason (description)",
+      "placeholder": "For example: For excellent organization of the conference...",
+      "save": "Saving...",
+      "submit": "Issue Record"
+    },
+    "positions": {
+      "rector": "Rector",
+      "vice_rector_academic": "Vice Rector for Academic Affairs",
+      "vice_rector_science": "Vice Rector for Science",
+      "dean": "Dean",
+      "head_of_department": "Head of Department",
+      "none": "No administrative position"
+    }
+  },
+  "tasks": {
+    "loading": "Loading board...",
+    "title": "Task Manager",
+    "tabs": {
+      "my_tasks": "My Tasks",
+      "delegated": "Delegated by Me",
+      "dept_all": "All Department Tasks",
+      "all": "All Institute Tasks"
+    },
+    "filters": {
+      "creator_all": "Creator: All",
+      "assignee_all": "Assignee: All",
+      "dept_all": "Department: All"
+    },
+    "create_btn": "Create Task",
+    "columns": {
+      "created": "Created",
+      "in_progress": "In Progress",
+      "on_review": "On Review",
+      "revision": "Revision",
+      "completed": "Completed"
+    },
+    "status": {
+      "created": "Created",
+      "in_progress": "In Progress",
+      "on_review": "On Review",
+      "revision": "On Revision",
+      "completed": "Completed"
+    },
+    "card": {
+      "creator": "Creator",
+      "department": "Department",
+      "revisions": "R:"
+    },
+    "board": {
+      "showing_last": "Showing last",
+      "out_of": "out of",
+      "drop_here": "Drop here"
+    },
+    "modal": {
+      "title": "New Task",
+      "error_assignee": "You must select an Assignee or a Target Department!",
+      "error_create": "Error creating task.",
+      "name_label": "Title *",
+      "desc_label": "Description *",
+      "deadline_label": "Deadline *",
+      "assignees_label": "Assignees",
+      "target_dept_label": "Target Departments",
+      "cancel": "Cancel",
+      "create": "Create"
+    },
+    "errors": {
+      "status_change": "Error changing status. You may not have permission."
+    }
+  },
+  "task_detail": {
+    "loading": "Loading task...",
+    "not_found": "Task not found",
+    "back": "Back",
+    "overdue": "OVERDUE",
+    "actions": {
+      "processing": "Processing...",
+      "take_in_progress": "Take in Progress",
+      "send_to_review": "Send to Review",
+      "accept": "Accept (Complete)",
+      "return_revision": "Return for Revision"
+    },
+    "timeline": {
+      "title": "Delay Timeline",
+      "subtitle": "Time spent in each status (in hours)",
+      "no_data": "No status change data available...",
+      "wait": "Waiting",
+      "in_progress": "In Progress",
+      "review": "On Review",
+      "revision": "Revision",
+      "hours": "h"
+    },
+    "reports": {
+      "title": "Reports and Comments",
+      "placeholder": "Write a comment or attach a report...",
+      "submitting": "Submitting...",
+      "submit_btn": "Submit Report",
+      "download_file": "Download attached file",
+      "employee": "Employee",
+      "empty": "No reports yet"
+    },
+    "info": {
+      "title": "Information",
+      "deadline": "Deadline",
+      "created_at": "Created",
+      "creator": "Creator",
+      "revision_count": "Revisions",
+      "quality": "Quality Score",
+      "assignees_title": "Assignees",
+      "no_assignees": "Unassigned",
+      "target_depts": "Target Departments"
+    }
+  }
+}

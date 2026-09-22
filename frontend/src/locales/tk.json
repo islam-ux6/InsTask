@@ -1,0 +1,221 @@
+{
+  "menu": {
+    "home": "Baş sahypa",
+    "tasks": "Tabşyryklar",
+    "departments": "Kafedralar",
+    "profile": "Meniň profilim",
+    "logout": "Çykmak"
+  },
+  "dashboard": {
+    "welcome": "Hoş geldiňiz",
+    "panel_institute": "Institut dolandyryş paneli",
+    "panel_department": "Kafedra dolandyryş paneli",
+    "panel_teacher": "Mugallym dolandyryş paneli",
+    "your_quality": "Siziň işiňiziň hili",
+    "completion_rate": "Wagtynda ýerine ýetiriş",
+    "lates_today": "Gijä galanlar (şu gün)",
+    "people": "adam",
+    "staff_online": "Ulgamdaky işgärler",
+    "productivity_center": "Öndürijilik merkezi",
+    "personal_productivity": "Şahsy öndürijilik",
+    "filters": {
+      "departments": "Kafedralar",
+      "delays_dept": "Gijikdirmeler (Kaf.)",
+      "employees": "Işgärler",
+      "delays_emp": "Gijikdirmeler (Işgär.)",
+      "revisions": "Kämilleşdirmeler",
+      "burnout": "Ýadawlyk",
+      "select_dept": "Kafedranyň işgärleri...",
+      "select_emp": "Işgär boýunça giňişleýin..."
+    },
+    "charts": {
+      "completed_on_time": "Wagtynda ýerine ýetirildi (%)",
+      "average_quality": "Ortaça hil (1-5)",
+      "task_completion": "Tabşyryklaryň ýerine ýetirilişi (%)",
+      "quality": "Hil (1-5)",
+      "where_stuck": "Tabşyryklar nirede saklanýar?",
+      "in_progress_hours": "Işlenýär (sagat)",
+      "on_review_hours": "Barlagda (sagat)",
+      "revision_hours": "Kämilleşdirmede (sagat)",
+      "burnout_risk": "Ýadawlyk howpy (Işjeň tabşyryklar)",
+      "active_tasks": "Işjeň tabşyryklar",
+      "revisions_freq": "Işgärler boýunça kämilleşdirme ýygylygy",
+      "first_try": "1-nji synanyşykdan",
+      "one_revision": "1 kämilleşdirme",
+      "multiple_revisions": "2 we ondan köp",
+      "detailed_profile": "Giňişleýin öndürijilik profili",
+      "task_funnel": "Tabşyryklaryň akymy",
+      "funnel": {
+        "created": "Döredildi",
+        "in_progress": "Işlenýär",
+        "revision": "Kämilleşdirme",
+        "on_review": "Barlagda",
+        "completed": "Tamamlandy"
+      },
+      "radar": {
+        "title": "Toplumlaýyn profil",
+        "quality": "Hil",
+        "discipline": "Düzgün-nyzam",
+        "autonomy": "Özbaşdaklyk",
+        "speed": "Tizlik",
+        "volume": "Möçber"
+      },
+      "no_data": "Maglumat ýok",
+      "select_employee_prompt": "Derňew üçin işgäri saýlaň"
+    }
+  },
+  "profile": {
+    "my_profile": "Meniň profilim",
+    "personnel_file": "Şahsy jilt:",
+    "teacher": "Mugallym",
+    "current_status": "Häzirki ýagdaý",
+    "work_status": "Iş ýagdaýy",
+    "active": "Işjeň",
+    "unknown": "Näbelli",
+    "department": "Kafedra",
+    "not_specified": "Görkezilmedik",
+    "working_hours": "Iş sagatlary",
+    "contact_info": "Habarlaşmak üçin",
+    "phone": "Telefon",
+    "email": "Email",
+    "employment_date": "Işe kabul edilen senesi",
+    "issue_record": "Sylag / Käýinç",
+    "attendance": "Gatnaşyk",
+    "on_time": "Wagtynda",
+    "late": "Gijä galdy",
+    "no_data": "Maglumat ýok",
+    "tabs": {
+      "tasks": "Tabşyryklar",
+      "schedule": "Sapak tertibi",
+      "rewards": "Sylaglar",
+      "reprimands": "Käýinçler"
+    },
+    "schedule": {
+      "odd_week": "Täk hepde (1)",
+      "even_week": "Jübüt hepde (2)",
+      "empty": "Bu hepde sapak bellenilmedi."
+    },
+    "records": {
+      "empty_rewards": "Häzirlikçe sylag ýok.",
+      "empty_reprimands": "Gaty gowy! Käýinç ýok.",
+      "issued": "Berlen senesi:",
+      "author": "Awtor:"
+    },
+    "modal": {
+      "title": "Şahsy jilde ýazgy",
+      "type": "Ýazgynyň görnüşi",
+      "reward": "Üstünlik (Sylag)",
+      "reprimand": "Käýinç (Bellik)",
+      "reason": "Sebäbi (düşündiriş)",
+      "placeholder": "Meselem: Maslahaty gowy guramandygy üçin...",
+      "save": "Ýazdyrylýar...",
+      "submit": "Ýazgyny goşmak"
+    },
+    "positions": {
+      "rector": "Rektor",
+      "vice_rector_academic": "Okuw işleri boýunça prorektor",
+      "vice_rector_science": "Ylmy işler boýunça prorektor",
+      "dean": "Dekan",
+      "head_of_department": "Kafedra müdiri",
+      "none": "Dolandyryş wezipesi ýok"
+    }
+  },
+  "tasks": {
+    "loading": "Tagta ýüklenýär...",
+    "title": "Tabşyryk dolandyryjysy",
+    "tabs": {
+      "my_tasks": "Meniň tabşyryklarym",
+      "delegated": "Men tabşyrdym",
+      "dept_all": "Kafedranyň ähli tabşyryklary",
+      "all": "Institutyň ähli tabşyryklary"
+    },
+    "filters": {
+      "creator_all": "Tabşyrykçy: Ählisi",
+      "assignee_all": "Ýerine ýetiriji: Ählisi",
+      "dept_all": "Kafedra: Ählisi"
+    },
+    "create_btn": "Tabşyryk döretmek",
+    "columns": {
+      "created": "Döredildi",
+      "in_progress": "Işlenýär",
+      "on_review": "Barlagda",
+      "revision": "Kämilleşdirme",
+      "completed": "Tamamlandy"
+    },
+    "status": {
+      "created": "Döredildi",
+      "in_progress": "Işlenýär",
+      "on_review": "Barlagda",
+      "revision": "Kämilleşdirmede",
+      "completed": "Tamamlandy"
+    },
+    "card": {
+      "creator": "Tabşyrykçy",
+      "department": "Kafedra",
+      "revisions": "K:"
+    },
+    "board": {
+      "showing_last": "Soňky görkezilýär",
+      "out_of": "jemi",
+      "drop_here": "Şu ýere geçir"
+    },
+    "modal": {
+      "title": "Täze tabşyryk",
+      "error_assignee": "Ýerine ýetirijini ýa-da Maksatly kafedrany hökman saýlaň!",
+      "error_create": "Tabşyryk döredilende ýalňyşlyk ýüze çykdy.",
+      "name_label": "Ady *",
+      "desc_label": "Düşündirişi *",
+      "deadline_label": "Möhleti *",
+      "assignees_label": "Ýerine ýetirijiler",
+      "target_dept_label": "Maksatly kafedralar",
+      "cancel": "Goýbolsun",
+      "create": "Döretmek"
+    },
+    "errors": {
+      "status_change": "Ýagdaýy üýtgetmekde ýalňyşlyk. Mümkin, rugsat ýokdur."
+    }
+  },
+  "task_detail": {
+    "loading": "Tabşyryk ýüklenýär...",
+    "not_found": "Tabşyryk tapylmady",
+    "back": "Yza",
+    "overdue": "GIGIJAN",
+    "actions": {
+      "processing": "Işlenýär...",
+      "take_in_progress": "Işe başlamak",
+      "send_to_review": "Barlaga ibermek",
+      "accept": "Kabul etmek (Tamamlamak)",
+      "return_revision": "Kämilleşdirmäge yzyna gaýtarmak"
+    },
+    "timeline": {
+      "title": "Gijikdirme tertibi",
+      "subtitle": "Her ýagdaýda geçirilen wagt (sagatda)",
+      "no_data": "Ýagdaýyň üýtgemegi barada maglumat ýok...",
+      "wait": "Garaşylýar",
+      "in_progress": "Işlenýär",
+      "review": "Barlag",
+      "revision": "Kämilleşdirme",
+      "hours": "sag."
+    },
+    "reports": {
+      "title": "Hasabatlar we teswirler",
+      "placeholder": "Teswir ýazyň ýa-da hasabat goşuldyň...",
+      "submitting": "Iberilýär...",
+      "submit_btn": "Hasabat goýmak",
+      "download_file": "Goşulan faýly ýükläp almak",
+      "employee": "Işgär",
+      "empty": "Häzirlikçe hasabat ýok"
+    },
+    "info": {
+      "title": "Maglumat",
+      "deadline": "Möhleti",
+      "created_at": "Döredildi",
+      "creator": "Tabşyrykçy",
+      "revision_count": "Kämilleşdirmeler",
+      "quality": "Hil bahasy",
+      "assignees_title": "Ýerine ýetirijiler",
+      "no_assignees": "Bellenilmedik",
+      "target_depts": "Maksatly kafedralar"
+    }
+  }
+}

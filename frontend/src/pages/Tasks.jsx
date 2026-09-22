@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Изменено: используем useNavigate вместо Link для карточек
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { useTranslation } from 'react-i18next'; // ПОДКЛЮЧЕНО
 
 export default function Tasks() {
   const navigate = useNavigate();
+  const { t } = useTranslation(); // ИНИЦИАЛИЗАЦИЯ ПЕРЕВОДЧИКА
+
   const [currentUser, setCurrentUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -50,14 +53,13 @@ export default function Tasks() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // --- ЛОГИКА DRAG-AND-DROP ---
   const handleDragStart = (e, taskId) => {
     e.dataTransfer.setData('taskId', taskId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e) => {
-    e.preventDefault(); // Обязательно, чтобы разрешить сброс элемента
+    e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
@@ -69,33 +71,26 @@ export default function Tasks() {
     const task = tasks.find(t => t.id === parseInt(taskId));
     if (!task || task.status === newStatus) return;
 
-    // 1. Оптимистичное обновление: мгновенно переносим карточку в интерфейсе
     const originalTasks = [...tasks];
     setTasks(tasks.map(t => t.id === parseInt(taskId) ? { ...t, status: newStatus } : t));
 
     try {
-      // 2. Отправляем запрос на сервер
       await api.patch(`/tasks/${taskId}/`, { status: newStatus });
-      fetchData(); // Синхронизируем, чтобы получить правильные таймеры от бэкенда
+      fetchData();
     } catch (error) {
-      // 3. Если сервер отклонил (например, нет прав) - откатываем интерфейс назад
       setTasks(originalTasks);
-      
-      let errMsg = 'Ошибка при изменении статуса. Возможно, у вас нет прав на это действие.';
-      // Пытаемся вытащить текст ошибки из нашего validate_status в сериализаторе
+      let errMsg = t('tasks.errors.status_change');
       if (error.response && error.response.data && error.response.data.status) {
         errMsg = error.response.data.status[0];
       }
       alert(errMsg);
     }
   };
-  // ----------------------------
 
   const getFilteredTasks = () => {
     if (!currentUser) return [];
     let filtered = [...tasks];
 
-    // Вкладки
     if (activeTab === 'my_tasks') {
       filtered = filtered.filter(t => t.assignees.some(a => a.id === currentUser.id));
     } else if (activeTab === 'delegated') {
@@ -107,7 +102,6 @@ export default function Tasks() {
       );
     }
 
-    // Фильтры сверху
     if (filterCreator) filtered = filtered.filter(t => t.creator.id === parseInt(filterCreator));
     if (filterAssignee) filtered = filtered.filter(t => t.assignees.some(a => a.id === parseInt(filterAssignee)));
     if (filterDept) filtered = filtered.filter(t => t.target_departments.some(d => d.id === parseInt(filterDept)));
@@ -119,7 +113,7 @@ export default function Tasks() {
     e.preventDefault();
     setCreateError('');
     if (newTask.assignee_ids.length === 0 && newTask.target_department_ids.length === 0) {
-      setCreateError('Обязательно выберите Исполнителя или Целевую кафедру!');
+      setCreateError(t('tasks.modal.error_assignee'));
       return;
     }
     try {
@@ -128,21 +122,21 @@ export default function Tasks() {
       setNewTask({ title: '', description: '', deadline: '', assignee_ids: [], target_department_ids: [] });
       fetchData(); 
     } catch (error) {
-      setCreateError('Ошибка при создании задачи.');
+      setCreateError(t('tasks.modal.error_create'));
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Загрузка доски...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">{t('tasks.loading')}</div>;
 
   const filteredTasks = getFilteredTasks();
   const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
 
   const columns = [
-    { id: 'created', title: 'Созданы', bg: 'bg-gray-100', text: 'text-gray-700' },
-    { id: 'in_progress', title: 'В работе', bg: 'bg-blue-50', text: 'text-blue-800' },
-    { id: 'on_review', title: 'На проверке', bg: 'bg-yellow-50', text: 'text-yellow-800' },
-    { id: 'revision', title: 'Доработка', bg: 'bg-red-50', text: 'text-red-800' },
-    { id: 'completed', title: 'Завершены', bg: 'bg-green-50', text: 'text-green-800' }
+    { id: 'created', title: t('tasks.columns.created'), bg: 'bg-gray-100', text: 'text-gray-700' },
+    { id: 'in_progress', title: t('tasks.columns.in_progress'), bg: 'bg-blue-50', text: 'text-blue-800' },
+    { id: 'on_review', title: t('tasks.columns.on_review'), bg: 'bg-yellow-50', text: 'text-yellow-800' },
+    { id: 'revision', title: t('tasks.columns.revision'), bg: 'bg-red-50', text: 'text-red-800' },
+    { id: 'completed', title: t('tasks.columns.completed'), bg: 'bg-green-50', text: 'text-green-800' }
   ];
 
   return (
@@ -150,26 +144,26 @@ export default function Tasks() {
       
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Менеджер задач</h1>
+          <h1 className="text-3xl font-bold text-gray-800">{t('tasks.title')}</h1>
           <div className="flex gap-4 mt-4 border-b border-gray-200 pb-1">
             {!currentUser.is_rectorate && (
               <button onClick={() => setActiveTab('my_tasks')} className={`pb-2 font-bold text-sm transition-colors ${activeTab === 'my_tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>
-                Мои задачи
+                {t('tasks.tabs.my_tasks')}
               </button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('delegated')} className={`pb-2 font-bold text-sm transition-colors ${activeTab === 'delegated' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>
-                Я поставил
+                {t('tasks.tabs.delegated')}
               </button>
             )}
             {currentUser.is_manager && (
               <button onClick={() => setActiveTab('dept_all')} className={`pb-2 font-bold text-sm transition-colors ${activeTab === 'dept_all' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>
-                Все задачи кафедры
+                {t('tasks.tabs.dept_all')}
               </button>
             )}
             {currentUser.is_rectorate && (
               <button onClick={() => setActiveTab('all')} className={`pb-2 font-bold text-sm transition-colors ${activeTab === 'all' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>
-                Все задачи института
+                {t('tasks.tabs.all')}
               </button>
             )}
           </div>
@@ -177,25 +171,25 @@ export default function Tasks() {
 
         <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
           <select value={filterCreator} onChange={(e) => setFilterCreator(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none">
-            <option value="">Постановщик: Все</option>
+            <option value="">{t('tasks.filters.creator_all')}</option>
             {users.filter(u => u.is_rectorate || u.is_manager).map(u => <option key={u.id} value={u.id}>{u.last_name} {u.first_name}</option>)}
           </select>
 
           <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none">
-            <option value="">Исполнитель: Все</option>
+            <option value="">{t('tasks.filters.assignee_all')}</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.last_name} {u.first_name}</option>)}
           </select>
 
           {currentUser.is_rectorate && (
             <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none">
-              <option value="">Кафедра: Все</option>
+              <option value="">{t('tasks.filters.dept_all')}</option>
               {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           )}
 
           {isAdmin && (
             <button onClick={() => setShowCreateModal(true)} className="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition whitespace-nowrap">
-              + Создать задачу
+              {t('tasks.create_btn')}
             </button>
           )}
         </div>
@@ -234,13 +228,13 @@ export default function Tasks() {
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => navigate(`/tasks/${task.id}`)}
-                      className="bg-white p-3 rounded-xl shadow-sm hover:shadow-md border border-gray-100 transition block shrink-0 cursor-grab active:cursor-grabbing"
+                      className={`bg-white p-3 rounded-xl shadow-sm hover:shadow-md border transition block shrink-0 cursor-grab active:cursor-grabbing ${isOverdue ? 'border-red-300 bg-red-50' : 'border-gray-100'}`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-600' : 'text-gray-400'}`}>
-                          {isOverdue ? '⚠️ ' : '⏳ '} {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                         </span>
-                        <div className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded" title="Постановщик">
+                        <div className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded" title={t('tasks.card.creator')}>
                           {task.creator?.last_name}
                         </div>
                       </div>
@@ -253,9 +247,9 @@ export default function Tasks() {
                               {a.last_name.charAt(0)}
                             </div>
                           ))}
-                          {task.assignees?.length === 0 && <span className="text-[9px] bg-red-50 text-red-600 px-1.5 rounded-full border border-red-100">Кафедра</span>}
+                          {task.assignees?.length === 0 && <span className="text-[9px] bg-red-50 text-red-600 px-1.5 rounded-full border border-red-100">{t('tasks.card.department')}</span>}
                         </div>
-                        {task.revision_count > 0 && <span className="text-[9px] text-red-500 font-bold bg-red-50 px-1.5 rounded">В: {task.revision_count}</span>}
+                        {task.revision_count > 0 && <span className="text-[9px] text-red-500 font-bold bg-red-50 px-1.5 rounded">{t('tasks.card.revisions')} {task.revision_count}</span>}
                       </div>
                     </div>
                   );
@@ -263,12 +257,12 @@ export default function Tasks() {
                 
                 {totalTasks > 20 && col.id === 'completed' && (
                   <div className="text-center text-xs text-gray-400 mt-2 py-2 border-t border-dashed border-gray-200 shrink-0">
-                    Показаны последние 20 из {totalTasks}
+                    {t('tasks.board.showing_last')} 20 {t('tasks.board.out_of')} {totalTasks}
                   </div>
                 )}
                 {totalTasks === 0 && (
                   <div className="text-center text-gray-400 text-xs mt-4 py-4 shrink-0 border-2 border-dashed border-gray-200 rounded-xl bg-white bg-opacity-40">
-                    Перетащите сюда
+                    {t('tasks.board.drop_here')}
                   </div>
                 )}
               </div>
@@ -277,43 +271,43 @@ export default function Tasks() {
         })}
       </div>
 
-      {/* МОДАЛКА ОСТАЛАСЬ БЕЗ ИЗМЕНЕНИЙ */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h2 className="text-xl font-bold text-gray-800">Новая задача</h2>
+              <h2 className="text-xl font-bold text-gray-800">{t('tasks.modal.title')}</h2>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
             </div>
             
             <div className="p-6 overflow-y-auto">
               {createError && (
                 <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-bold flex items-start gap-2">
-                  <span>⚠️</span> {createError}
+                  {createError}
                 </div>
               )}
               <form id="taskForm" onSubmit={handleCreateTask} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Название *</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.name_label')}</label>
                   <input type="text" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Описание *</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.desc_label')}</label>
                   <textarea rows="4" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})}></textarea>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Дедлайн *</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.deadline_label')}</label>
                     <input type="datetime-local" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between">
-                      <span>Исполнители</span>
+                      <span>{t('tasks.modal.assignees_label')}</span>
                     </label>
                     <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-28" value={newTask.assignee_ids} onChange={e => setNewTask({...newTask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
                       {users.map(u => {
                         const stats = analytics?.employees?.find(emp => emp.id === u.id);
-                        const statLabel = stats ? ` | 🔥 ${stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision}` : '';
+                        // ИСПРАВЛЕНИЕ: Убрал эмодзи огонька из статистики сотрудника при создании задачи
+                        const statLabel = stats ? ` | Актив: ${stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision}` : '';
                         return <option key={u.id} value={u.id} className="py-1 border-b border-gray-50 text-sm">{u.last_name} {u.first_name} {statLabel}</option>;
                       })}
                     </select>
@@ -321,7 +315,7 @@ export default function Tasks() {
                 </div>
                 {currentUser.is_rectorate && (
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between"><span>Целевые кафедры</span></label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between"><span>{t('tasks.modal.target_dept_label')}</span></label>
                     <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" value={newTask.target_department_ids} onChange={e => setNewTask({...newTask, target_department_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
                       {departments.map(d => <option key={d.id} value={d.id} className="py-1 text-sm">{d.name}</option>)}
                     </select>
@@ -331,8 +325,8 @@ export default function Tasks() {
             </div>
             
             <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-              <button type="button" onClick={() => setShowCreateModal(false)} className="px-5 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-200">Отмена</button>
-              <button type="submit" form="taskForm" className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md">Создать</button>
+              <button type="button" onClick={() => setShowCreateModal(false)} className="px-5 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-200">{t('tasks.modal.cancel')}</button>
+              <button type="submit" form="taskForm" className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md">{t('tasks.modal.create')}</button>
             </div>
           </div>
         </div>
