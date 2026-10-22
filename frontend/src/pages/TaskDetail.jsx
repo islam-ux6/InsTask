@@ -9,7 +9,7 @@ import {
 export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   const [currentUser, setCurrentUser] = useState(null);
   const [task, setTask] = useState(null);
@@ -25,11 +25,9 @@ export default function TaskDetail() {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
-  // Состояния для модального окна оценки качества (1-5 звезд)
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [qualityScore, setQualityScore] = useState(5);
 
-  // Состояния для модального окна создания подзадачи
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [newSubtask, setNewSubtask] = useState({
     title: '',
@@ -38,6 +36,8 @@ export default function TaskDetail() {
     assignee_ids: []
   });
   const [creatingSubtask, setCreatingSubtask] = useState(false);
+
+  const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
 
   const fetchTaskData = async () => {
     try {
@@ -55,7 +55,6 @@ export default function TaskDetail() {
       setUsers(usersRes.data);
       setReports(currentTask.reports || reportsRes.data || []);
 
-      // Фильтруем дочерние подзадачи и находим родительскую задачу
       const allTasks = allTasksRes.data || [];
       const childTasks = currentTask.subtasks || allTasks.filter(item => item.parent_task === Number(id));
       setSubtasks(childTasks);
@@ -91,11 +90,21 @@ export default function TaskDetail() {
       setShowQualityModal(false);
       await fetchTaskData(); 
     } catch (error) {
-      alert(t('tasks.errors.status_change'));
+      const serverMsg = error.response?.data?.status?.[0] || t('tasks.errors.status_change');
+      alert(serverMsg);
       console.error(error);
     } finally {
       setIsChangingStatus(false); 
     }
+  };
+
+  const handleAcceptClick = () => {
+    const hasIncompleteSubtasks = subtasks.some(s => s.status !== 'completed');
+    if (hasIncompleteSubtasks) {
+      alert(t('task_detail.subtasks.incomplete_warning'));
+      return;
+    }
+    setShowQualityModal(true);
   };
 
   const handleCreateSubtask = async (e) => {
@@ -191,9 +200,33 @@ export default function TaskDetail() {
   }];
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
-  const isAssignee = task.assignees?.some(a => a.id === currentUser.id);
+  
+  // ИСПРАВЛЕНО: Учитываем не только прямых исполнителей, но и сотрудников целевой кафедры
+  const isDirectAssignee = task.assignees?.some(a => a.id === currentUser.id);
+  const isInTargetDept = Boolean(
+    currentUser.department &&
+    task.target_departments?.some(d => d.id === currentUser.department)
+  );
+  const isAssignee = isDirectAssignee || isInTargetDept;
   const isCreator = task.creator?.id === currentUser.id;
-  const canManageSubtasks = isCreator || isAssignee || currentUser.is_manager || currentUser.is_rectorate;
+  const canManageSubtasks = (isCreator || isAssignee) && (currentUser.is_manager || currentUser.is_rectorate);
+
+  // ИСПРАВЛЕНО: Фильтрация подчиненных по иерархии для создания подзадач
+  const subordinateUsers = users.filter(u => {
+    if (u.id === currentUser.id) return false;
+    if (currentUser.is_rectorate) return true;
+    if (u.is_rectorate) return false;
+    if (['dean', 'deputy_dean'].includes(currentUser.position)) {
+      return u.position !== 'dean';
+    }
+    if (currentUser.position === 'head_of_department') {
+      return (
+        u.department === currentUser.department &&
+        !['dean', 'deputy_dean', 'head_of_department'].includes(u.position)
+      );
+    }
+    return false;
+  });
 
   const completedSubtasksCount = subtasks.filter(s => s.status === 'completed').length;
   const subtaskProgress = subtasks.length > 0 ? Math.round((completedSubtasksCount / subtasks.length) * 100) : 0;
@@ -254,11 +287,11 @@ export default function TaskDetail() {
             </button>
           )}
           
-          {task.status === 'on_review' && isCreator && (
+          {task.status === 'on_review' && (isCreator || currentUser.is_rectorate) && (
             <>
               <button 
                 disabled={isChangingStatus}
-                onClick={() => setShowQualityModal(true)} 
+                onClick={handleAcceptClick} 
                 className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}
               >
                 {t('task_detail.actions.accept')}
@@ -279,7 +312,7 @@ export default function TaskDetail() {
         
         <div className="lg:col-span-2 space-y-6">
 
-          {/* БЛОК ПОДЗАДАЧ (SUBTASKS) */}
+          {/* БЛОК ПОДЗАДАЧ */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex justify-between items-center mb-4">
               <div>
@@ -287,7 +320,7 @@ export default function TaskDetail() {
                   {t('task_detail.subtasks.title')} ({completedSubtasksCount}/{subtasks.length})
                 </h3>
               </div>
-              {canManageSubtasks && task.status !== 'completed' && (
+              {canManageSubtasks && task.status !== 'completed' && subordinateUsers.length > 0 && (
                 <button
                   onClick={() => setShowSubtaskModal(true)}
                   className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-xl text-xs font-bold transition"
@@ -324,7 +357,7 @@ export default function TaskDetail() {
                           {sub.title}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {new Date(sub.deadline).toLocaleDateString('ru-RU')}
+                          {new Date(sub.deadline).toLocaleDateString(dateLocale)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -405,7 +438,7 @@ export default function TaskDetail() {
               <h3 className="font-bold text-gray-800 text-lg">{t('task_detail.reports.title')}</h3>
             </div>
             
-            {(isAssignee || isCreator) && task.status !== 'completed' && (
+            {(isAssignee || isCreator || currentUser.is_rectorate) && task.status !== 'completed' && (
               <div className="p-6 border-b border-gray-100">
                 <form onSubmit={handleSubmitReport}>
                   <textarea 
@@ -445,7 +478,7 @@ export default function TaskDetail() {
                       <span className="font-bold text-gray-800">
                         {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : t('task_detail.reports.employee')}
                       </span>
-                      <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString('ru-RU')}</span>
+                      <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString(dateLocale)}</span>
                     </div>
                     <p className="text-gray-700 text-sm whitespace-pre-wrap">{rep.comment}</p>
                     
@@ -480,12 +513,12 @@ export default function TaskDetail() {
               <div>
                 <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.deadline')}</p>
                 <p className={`font-bold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
-                  {new Date(task.deadline).toLocaleString('ru-RU')}
+                  {new Date(task.deadline).toLocaleString(dateLocale)}
                 </p>
               </div>
               <div>
                 <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.created_at')}</p>
-                <p className="text-gray-800 font-medium">{new Date(task.created_at).toLocaleString('ru-RU')}</p>
+                <p className="text-gray-800 font-medium">{new Date(task.created_at).toLocaleString(dateLocale)}</p>
               </div>
               <div>
                 <p className="text-gray-400 font-medium mb-1">{t('task_detail.info.creator')}</p>
@@ -636,9 +669,9 @@ export default function TaskDetail() {
                   onChange={e => setNewSubtask({...newSubtask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}
                   className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-28"
                 >
-                  {users.map(u => (
+                  {subordinateUsers.map(u => (
                     <option key={u.id} value={u.id} className="py-1 text-sm">
-                      {u.last_name} {u.first_name}
+                      {u.last_name} {u.first_name} ({t(`profile.positions.${u.position}`, { defaultValue: u.position_display })})
                     </option>
                   ))}
                 </select>

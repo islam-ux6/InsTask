@@ -4,7 +4,6 @@ from .models import EmployeeRecord, DailyAttendance
 
 User = get_user_model()
 
-# 1. Новый сериализатор для личного дела
 class EmployeeRecordSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     record_type_display = serializers.CharField(source='get_record_type_display', read_only=True)
@@ -12,13 +11,14 @@ class EmployeeRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeRecord
         fields = ['id', 'user', 'record_type', 'record_type_display', 'description', 'author_name', 'created_at']
+        read_only_fields = ['author_name', 'created_at']
 
     def get_author_name(self, obj):
         if obj.author:
             return f"{obj.author.first_name} {obj.author.last_name}".strip() or obj.author.username
         return "Система"
 
-# 2. Обновленный сериализатор профиля
+
 class UserProfileSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
     teaching_status_display = serializers.CharField(source='get_teaching_status_display', read_only=True)
@@ -45,26 +45,32 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'attendance_history',
             'schedule'
         ]
-        read_only_fields = ['is_manager', 'is_rectorate']
+        # ИСПРАВЛЕНО: Запрещаем пользователям менять себе должность, степень или кафедру через API
+        read_only_fields = [
+            'username', 'position', 'teaching_status', 'academic_degree',
+            'department', 'employment_date', 'working_hours',
+            'is_manager', 'is_rectorate'
+        ]
 
     def get_attendance_history(self, obj):
-        records = DailyAttendance.objects.filter(user=obj)
+        # ИСПРАВЛЕНО: Используем prefetched-кэш obj.attendance_records.all() вместо нового запроса к БД
+        records = obj.attendance_records.all()
         return {str(record.date): record.status for record in records}
 
     def get_schedule(self, obj):
-        # 1. Создаем пустой шаблон (точно такой, как ждет React)
         days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
         schedule_data = {
             'odd': {day: [] for day in days},
             'even': {day: [] for day in days}
         }
 
-        # 2. Получаем все пары преподавателя из базы
-        # (Используем prefetch_related во views, чтобы избежать N+1 проблемы)
         items = obj.schedule_items.all()
 
-        # 3. Раскладываем пары по полочкам
         for item in items:
+            day_key = item.day_of_week
+            if day_key not in schedule_data['odd']:
+                continue
+
             entry = {
                 'time': item.time_slot,
                 'name': item.subject_name,
@@ -73,11 +79,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 'group': item.group
             }
 
-            # Если пара проходит каждую неделю - добавляем в обе ветки
             if item.week_type in ['odd', 'both']:
-                schedule_data['odd'][item.day_of_week].append(entry)
+                schedule_data['odd'][day_key].append(entry)
             
             if item.week_type in ['even', 'both']:
-                schedule_data['even'][item.day_of_week].append(entry)
+                schedule_data['even'][day_key].append(entry)
 
         return schedule_data

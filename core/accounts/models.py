@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 class User(AbstractUser):
     class TeachingStatus(models.TextChoices):
@@ -79,12 +80,12 @@ class DailyAttendance(models.Model):
         LATE = 'late', 'Опоздал'
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_records', verbose_name='Сотрудник')
-    date = models.DateField(auto_now_add=True, verbose_name='Дата')
-    arrival_time = models.TimeField(auto_now_add=True, verbose_name='Время фиксации')
+    # ИСПРАВЛЕНО: default вместо auto_now_add позволяет сохранять исторические даты в скриптах
+    date = models.DateField(default=timezone.localdate, verbose_name='Дата')
+    arrival_time = models.TimeField(default=timezone.localtime, verbose_name='Время фиксации')
     status = models.CharField(max_length=10, choices=Status.choices, verbose_name='Статус')
 
     class Meta:
-        # Запрещаем создавать больше одной записи для одного человека в день
         unique_together = ['user', 'date']
         verbose_name = 'Посещаемость'
         verbose_name_plural = 'Посещаемость'

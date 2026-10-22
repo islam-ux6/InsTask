@@ -4,12 +4,14 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next'; 
 
 export default function Departments() {
-  const { t } = useTranslation(); 
+  const { t, i18n } = useTranslation(); 
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedDeptId, setSelectedDeptId] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,6 +44,14 @@ export default function Departments() {
 
   const currentDeptUsers = users.filter(u => u.department === selectedDeptId);
   const selectedDeptInfo = departments.find(d => d.id === selectedDeptId);
+
+  const canViewPersonnelFile = (employee) => {
+    if (!currentUser) return false;
+    if (currentUser.id === employee.id) return true;
+    if (currentUser.is_rectorate || ['dean', 'deputy_dean'].includes(currentUser.position)) return true;
+    if (currentUser.position === 'head_of_department' && currentUser.department === employee.department) return true;
+    return false;
+  };
 
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col md:flex-row gap-6 pb-6">
@@ -97,7 +107,6 @@ export default function Departments() {
                       </h3>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <span className="inline-block bg-blue-50 text-blue-700 border border-blue-100 text-[10px] uppercase font-bold px-2 py-0.5 rounded">
-                          {/* ИСПРАВЛЕНИЕ: Перевод должности и статуса */}
                           {employee.position && employee.position !== 'none'
                             ? t(`profile.positions.${employee.position}`, { defaultValue: employee.position_display }) 
                             : t(`profile.teaching_statuses.${employee.teaching_status}`, { defaultValue: employee.teaching_status_display || t('profile.teacher') })}
@@ -113,13 +122,12 @@ export default function Departments() {
 
                   <div className="p-5 flex-1 space-y-3">
                     <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-500">{t('departments.card.status')}</span>
-                    <span className={`font-semibold ${
-                        employee.work_status === 'working' ? 'text-green-600' : 'text-orange-500'
-                    }`}>
-                        {/* ИСПРАВЛЕНИЕ: Рабочий статус */}
-                        {t(`profile.work_statuses.${employee.work_status}`, { defaultValue: employee.work_status_display || t('departments.card.working') })}
-                    </span>
+                      <span className="text-gray-500">{t('departments.card.status')}</span>
+                      <span className={`font-semibold ${
+                          employee.work_status === 'working' ? 'text-green-600' : 'text-orange-500'
+                      }`}>
+                          {t(`profile.work_statuses.${employee.work_status}`, { defaultValue: employee.work_status_display || t('departments.card.working') })}
+                      </span>
                     </div>
                     
                     <div className="flex justify-between items-center text-sm">
@@ -142,12 +150,12 @@ export default function Departments() {
                     {employee.employment_date && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">{t('departments.card.hired')}</span>
-                        <span className="text-gray-800 font-medium">{new Date(employee.employment_date).toLocaleDateString('ru-RU')}</span>
+                        <span className="text-gray-800 font-medium">{new Date(employee.employment_date).toLocaleDateString(dateLocale)}</span>
                       </div>
                     )}
                   </div>
 
-                  {(currentUser?.is_rectorate || currentUser?.is_manager) && (
+                  {canViewPersonnelFile(employee) && (
                     <div className="p-4 bg-gray-50 border-t border-gray-100">
                       <Link 
                         to={`/profile/${employee.id}`} 

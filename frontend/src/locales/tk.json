@@ -99,6 +99,31 @@
     "on_time": "Wagtynda",
     "late": "Gijä galdy",
     "no_data": "Maglumat ýok",
+    "calendar": {
+      "months": {
+        "0": "Ýanwar",
+        "1": "Fewral",
+        "2": "Mart",
+        "3": "Aprel",
+        "4": "Maý",
+        "5": "Iýun",
+        "6": "Iýul",
+        "7": "Awgust",
+        "8": "Sentýabr",
+        "9": "Oktýabr",
+        "10": "Noýabr",
+        "11": "Dekabr"
+      },
+      "weekdays_short": {
+        "mon": "Du",
+        "tue": "Si",
+        "wed": "Ça",
+        "thu": "Pe",
+        "fri": "An",
+        "sat": "Şe",
+        "sun": "Ýe"
+      }
+    },
     "tabs": {
       "tasks": "Tabşyryklar",
       "schedule": "Sapak tertibi",
@@ -108,7 +133,18 @@
     "schedule": {
       "odd_week": "Täk hepde (1)",
       "even_week": "Jübüt hepde (2)",
-      "empty": "Bu hepde sapak bellenilmedi."
+      "empty": "Bu hepde sapak bellenilmedi.",
+      "type": "Görnüşi:",
+      "group": "Topar:",
+      "room": "Otag:",
+      "days": {
+        "Понедельник": "Duşenbe",
+        "Вторник": "Sişenbe",
+        "Среда": "Çarşenbe",
+        "Четверг": "Penşenbe",
+        "Пятница": "Anna",
+        "Суббота": "Şenbe"
+      }
     },
     "records": {
       "empty_rewards": "Häzirlikçe sylag ýok.",
@@ -214,7 +250,9 @@
       "name_label": "Ady *",
       "desc_label": "Düşündirişi *",
       "deadline_label": "Möhleti *",
-      "assignees_label": "Ýerine ýetirijiler",
+      "assignees_label": "Ýerine ýetirijiler (tabynlyk boýunça)",
+      "active_load": "Işjeň:",
+      "no_subordinates": "Bellemek üçin elýeterli işgär ýok",
       "target_dept_label": "Maksatly kafedralar",
       "cancel": "Goýbolsun",
       "create": "Döretmek"
@@ -246,7 +284,8 @@
       "add_btn": "+ Kiçi tabşyryk goşmak",
       "progress": "Ýerine ýetirildi",
       "empty": "Häzirlikçe kiçi tabşyryk ýok. Bu işi tapgyrlara bölüp bilersiňiz.",
-      "modal_title": "Kiçi tabşyryk döretmek"
+      "modal_title": "Kiçi tabşyryk döretmek",
+      "incomplete_warning": "Ähli kiçi tabşyryklar tamamlanýança esasy tabşyrygy tamamlap bolmaýar!"
     },
     "timeline": {
       "title": "Gijikdirme tertibi",

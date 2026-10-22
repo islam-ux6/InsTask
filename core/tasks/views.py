@@ -10,20 +10,16 @@ from .serializers import TaskSerializer, TaskReportSerializer
 from .permissions import IsTaskParticipant, IsAssigneeForAccept 
 
 
-# --- БЕЗОПАСНАЯ И БРОНЕБОЙНАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ---
 def transition_task_status(task, old_status, new_status):
     if task.status == new_status:
         return
 
-    # ИДЕМПОТЕНТНОСТЬ: Если последний лог уже с нужным статусом, игнорируем дубли
     last_log = task.status_logs.order_by('-entered_at').first()
     if last_log and last_log.status == new_status:
         return
 
-    # УБИЙЦА КЛОНОВ: Закрываем ВООБЩЕ ВСЕ открытые секундомеры у этой задачи!
     task.status_logs.filter(exited_at__isnull=True).update(exited_at=timezone.now())
 
-    # Обновляем саму задачу
     task.status = new_status
     if new_status == Task.Status.REVISION:
         task.revision_count += 1
@@ -32,7 +28,6 @@ def transition_task_status(task, old_status, new_status):
     
     task.save()
 
-    # Запускаем один чистый секундомер
     TaskStatusLog.objects.create(task=task, status=new_status)
 
 
@@ -43,14 +38,26 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         base_qs = Task.objects.all().select_related('creator').prefetch_related(
-            'assignees', 'target_departments', 'reports'
+            'assignees', 'target_departments', 'reports', 'status_logs', 'subtasks', 'subtasks__assignees'
         )
 
-        if user.is_rectorate or user.is_manager:
+        # 1. Ректорат и Деканат видят все задачи института
+        if user.is_rectorate or user.position in ['dean', 'deputy_dean']:
             return base_qs.distinct()
 
+        # 2. Заведующий кафедрой видит только задачи, связанные с его кафедрой
+        if user.position == 'head_of_department' and user.department:
+            return base_qs.filter(
+                Q(creator=user) |
+                Q(assignees=user) |
+                Q(target_departments=user.department) |
+                Q(assignees__department=user.department) |
+                Q(creator__department=user.department)
+            ).distinct()
+
+        # 3. Преподаватели видят свои задачи, задачи своей кафедры и созданные ими подзадачи
         return base_qs.filter(
-            Q(assignees=user) | Q(target_departments=user.department)
+            Q(assignees=user) | Q(target_departments=user.department) | Q(creator=user)
         ).distinct()
 
     def perform_create(self, serializer):
@@ -86,13 +93,22 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
 class TaskReportViewSet(viewsets.ModelViewSet):
-    queryset = TaskReport.objects.all()
+    queryset = TaskReport.objects.all().select_related('author', 'task')
     serializer_class = TaskReportSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        report = serializer.save(author=self.request.user)
+        user = self.request.user
+        report = serializer.save(author=user)
         task = report.task
 
-        if task.status not in [Task.Status.COMPLETED, Task.Status.ON_REVIEW]:
+        # ИСПРАВЛЕНО: Автоматический перевод в "На проверке" срабатывает ТОЛЬКО если отчет
+        # отправляет исполнитель задачи, а не сам постановщик/проверяющий
+        is_assignee = task.assignees.filter(id=user.id).exists() or (
+            user.department is not None and task.target_departments.filter(id=user.department.id).exists()
+        )
+        is_creator = (task.creator == user)
+
+        if is_assignee and not is_creator and task.status in [Task.Status.IN_PROGRESS, Task.Status.REVISION]:
             old_status = task.status
             transition_task_status(task, old_status, Task.Status.ON_REVIEW)

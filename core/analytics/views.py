@@ -1,3 +1,4 @@
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -16,20 +17,27 @@ class DashboardAnalyticsView(APIView):
     def get(self, request):
         user = request.user
         today = timezone.localdate()
+        thirty_days_ago = today - timedelta(days=30)
 
-        if user.is_rectorate:
-            users_qs = User.objects.all()
+        if user.is_rectorate or user.position in ['dean', 'deputy_dean']:
+            # Для графиков сотрудников берем всех, кроме самого Ректората
+            users_qs = User.objects.exclude(position__in=['rector', 'prorector'])
             tasks_qs = Task.objects.all()
             scope = "institute"
         elif user.is_manager and user.department:
             users_qs = User.objects.filter(department=user.department)
+            # ИСПРАВЛЕНО: Учитываем задачи, назначенные сотрудникам кафедры напрямую
             tasks_qs = Task.objects.filter(
-                Q(target_departments=user.department) | Q(creator=user)
+                Q(target_departments=user.department) |
+                Q(assignees__department=user.department) |
+                Q(creator=user)
             ).distinct()
             scope = "department"
         else:
             users_qs = User.objects.filter(id=user.id)
-            tasks_qs = Task.objects.filter(assignees=user)
+            tasks_qs = Task.objects.filter(
+                Q(assignees=user) | Q(target_departments=user.department)
+            ).distinct()
             scope = "personal"
 
         def get_cycle_time(log_qs):
@@ -53,13 +61,16 @@ class DashboardAnalyticsView(APIView):
         late = today_attendance.filter(status=DailyAttendance.Status.LATE).count()
 
         departments_data = []
-        if user.is_rectorate:
+        if scope == "institute":
             for dept in Department.objects.all():
-                d_tasks = Task.objects.filter(target_departments=dept)
+                # ИСПРАВЛЕНО: Считаем и задачи на кафедру, и задачи сотрудников этой кафедры
+                d_tasks = Task.objects.filter(
+                    Q(target_departments=dept) | Q(assignees__department=dept)
+                ).distinct()
                 d_tot = d_tasks.count()
                 d_comp = d_tasks.filter(status=Task.Status.COMPLETED).count()
                 d_qual = d_tasks.filter(status=Task.Status.COMPLETED).aggregate(Avg('quality_score'))['quality_score__avg'] or 0
-                d_logs = TaskStatusLog.objects.filter(task__target_departments=dept)
+                d_logs = TaskStatusLog.objects.filter(task__in=d_tasks)
 
                 departments_data.append({
                     "id": dept.id,
@@ -82,7 +93,8 @@ class DashboardAnalyticsView(APIView):
         max_tasks_in_qs = 1 
         for u in users_qs:
             c = Task.objects.filter(assignees=u).count()
-            if c > max_tasks_in_qs: max_tasks_in_qs = c
+            if c > max_tasks_in_qs:
+                max_tasks_in_qs = c
 
         for emp in users_qs:
             e_tasks = Task.objects.filter(assignees=emp)
@@ -94,7 +106,8 @@ class DashboardAnalyticsView(APIView):
             e_qual_raw = e_comp_tasks.aggregate(Avg('quality_score'))['quality_score__avg'] or 0
             radar_quality = round((e_qual_raw / 5) * 100) if e_qual_raw else 0
             
-            emp_att = DailyAttendance.objects.filter(user=emp, date__month=today.month)
+            # ИСПРАВЛЕНО: Берем дисциплину за последние 30 дней (без привязки только к номеру месяца)
+            emp_att = DailyAttendance.objects.filter(user=emp, date__gte=thirty_days_ago)
             e_on_time = emp_att.filter(status=DailyAttendance.Status.ON_TIME).count()
             e_late = emp_att.filter(status=DailyAttendance.Status.LATE).count()
             radar_discipline = round((e_on_time / (e_on_time + e_late)) * 100) if (e_on_time + e_late) > 0 else 100
@@ -109,8 +122,6 @@ class DashboardAnalyticsView(APIView):
 
             e_logs = TaskStatusLog.objects.filter(task__assignees=emp)
             
-            # --- НОВОЕ: Считаем статистику доработок ---
-            # Берем вообще все задачи, которые брались в работу (исключаем только созданные)
             active_and_completed_tasks = e_tasks.exclude(status=Task.Status.CREATED)
             total_worked = active_and_completed_tasks.count()
             

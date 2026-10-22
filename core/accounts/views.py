@@ -93,7 +93,18 @@ class EmployeeRecordViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        target_user = serializer.validated_data.get('user')
+
         if not user.is_manager and not user.is_rectorate:
             raise serializers.ValidationError("Только руководство может выдавать достижения и выговоры.")
         
+        if user == target_user:
+            raise serializers.ValidationError("Нельзя выдать запись самому себе.")
+
+        if target_user.is_rectorate and not user.is_rectorate:
+            raise serializers.ValidationError("Вы не можете выдавать записи руководству ректората.")
+
+        if user.position == 'head_of_department' and target_user.department != user.department:
+            raise serializers.ValidationError("Заведующий кафедрой может выдавать записи только сотрудникам своей кафедры.")
+
         serializer.save(author=user)

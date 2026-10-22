@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 export default function Profile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   const [currentUser, setCurrentUser] = useState(null); 
   const [user, setUser] = useState(null);
@@ -25,6 +25,8 @@ export default function Profile() {
 
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+
+  const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,7 +48,8 @@ export default function Profile() {
         
         const targetUserId = profileData.id;
         const myAssignedTasks = tasksRes.data.filter(task => 
-          task.assignees.some(assignee => assignee.id === targetUserId)
+          task.assignees.some(assignee => assignee.id === targetUserId) ||
+          (profileData.department && task.target_departments?.some(d => d.id === profileData.department))
         );
         setTasks(myAssignedTasks);
         
@@ -60,7 +63,6 @@ export default function Profile() {
     fetchData();
   }, [id]);
 
-  // Смена рабочего статуса (Работает / В отпуске / На больничном / В командировке)
   const handleWorkStatusChange = async (newWorkStatus) => {
     setUpdatingStatus(true);
     try {
@@ -74,7 +76,6 @@ export default function Profile() {
     }
   };
 
-  // Отметка посещаемости за сегодня
   const handleCheckIn = async () => {
     setCheckingIn(true);
     try {
@@ -121,8 +122,25 @@ export default function Profile() {
   const reprimands = user.records?.filter(r => r.record_type === 'reprimand') || [];
   const isMyProfile = !id || Number(id) === currentUser.id;
 
-  const canIssueRecords = (currentUser.is_manager || currentUser.is_rectorate) && !isMyProfile;
-  const canEditWorkStatus = currentUser.is_manager || currentUser.is_rectorate || isMyProfile;
+  // ИСПРАВЛЕНО: Строгая проверка субординации для выдачи выговоров/наград и смены статуса
+  const isSubordinate = (() => {
+    if (isMyProfile) return false;
+    if (currentUser.is_rectorate) return true;
+    if (user.is_rectorate) return false; // Ректорату никто нижестоящий выдавать записи не может
+    if (['dean', 'deputy_dean'].includes(currentUser.position)) {
+      return user.position !== 'dean';
+    }
+    if (currentUser.position === 'head_of_department') {
+      return (
+        user.department === currentUser.department &&
+        !['dean', 'deputy_dean', 'head_of_department'].includes(user.position)
+      );
+    }
+    return false;
+  })();
+
+  const canIssueRecords = isSubordinate;
+  const canEditWorkStatus = isMyProfile || isSubordinate;
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
@@ -132,7 +150,6 @@ export default function Profile() {
 
   const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
   const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
-  const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
   const formatDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const todayObj = new Date();
@@ -142,7 +159,8 @@ export default function Profile() {
   const getDayStatus = (day) => {
     const dateStr = formatDate(year, month, day);
     const dayOfWeek = new Date(year, month, day).getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend';
+    // ИСПРАВЛЕНО: В вузе шестидневка, выходной только воскресенье (0). Суббота (6) учитывается!
+    if (dayOfWeek === 0) return 'weekend';
     if (dateStr > todayStr) return 'future';
 
     if (user.attendance_history && user.attendance_history[dateStr]) {
@@ -173,6 +191,7 @@ export default function Profile() {
   const displayedTasks = tasks.filter(task => taskFilter === 'all' ? true : task.status === taskFilter);
   const scheduleData = user.schedule || { odd: {}, even: {} };
   const daysOfWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const weekdayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   const currentSchedule = scheduleData[weekParity] || {};
 
   return (
@@ -189,7 +208,7 @@ export default function Profile() {
             <div className={`absolute top-4 right-4 w-3 h-3 rounded-full ${
               user.work_status === 'working' ? 'bg-green-500 animate-pulse' : 
               user.work_status === 'vacation' ? 'bg-blue-400' : 'bg-gray-400'
-            }`} title={user.work_status_display || t('profile.unknown')}></div>
+            }`} title={t(`profile.work_statuses.${user.work_status}`, { defaultValue: user.work_status_display })}></div>
 
             <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-full mx-auto flex items-center justify-center text-4xl font-bold mb-4 shadow-md">
               {user.first_name ? user.first_name[0] : user.username[0]}
@@ -281,7 +300,7 @@ export default function Profile() {
               <div>
                 <p className="text-xs text-gray-500 mb-1">{t('profile.employment_date')}</p>
                 <p className="font-medium text-gray-800">
-                  {user.employment_date ? new Date(user.employment_date).toLocaleDateString('ru-RU') : t('profile.not_specified')}
+                  {user.employment_date ? new Date(user.employment_date).toLocaleDateString(dateLocale) : t('profile.not_specified')}
                 </p>
               </div>
             </div>
@@ -290,14 +309,15 @@ export default function Profile() {
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-gray-800 text-sm">{t('profile.attendance')}</h3>
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 items-center">
                 <button onClick={prevMonth} className="text-gray-400 hover:text-gray-800 font-bold px-2 rounded hover:bg-gray-100">&lt;</button>
-                <span className="text-sm font-semibold text-gray-700 w-20 text-center">{monthNames[month]} {year}</span>
+                <span className="text-xs font-semibold text-gray-700 w-24 text-center">
+                  {t(`profile.calendar.months.${month}`)} {year}
+                </span>
                 <button onClick={nextMonth} className="text-gray-400 hover:text-gray-800 font-bold px-2 rounded hover:bg-gray-100">&gt;</button>
               </div>
             </div>
 
-            {/* КНОПКА ОТМЕТКИ ПОСЕЩАЕМОСТИ */}
             {isMyProfile && (
               <div className="mb-4">
                 {!isCheckedInToday ? (
@@ -323,8 +343,10 @@ export default function Profile() {
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center">
-              {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-                <div key={day} className="text-[10px] font-bold text-gray-400 mb-1">{day}</div>
+              {weekdayKeys.map(dayKey => (
+                <div key={dayKey} className="text-[10px] font-bold text-gray-400 mb-1">
+                  {t(`profile.calendar.weekdays_short.${dayKey}`)}
+                </div>
               ))}
               {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} className="h-8"></div>)}
               {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -370,7 +392,11 @@ export default function Profile() {
                       if (!dayClasses || dayClasses.length === 0) return null;
                       return (
                         <div key={day} className="border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200"><h4 className="font-bold text-gray-800">{day}</h4></div>
+                          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                            <h4 className="font-bold text-gray-800">
+                              {t(`profile.schedule.days.${day}`, { defaultValue: day })}
+                            </h4>
+                          </div>
                           <div className="divide-y divide-gray-100">
                             {dayClasses.map((cls, idx) => (
                               <div key={idx} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50 transition-colors">
@@ -378,9 +404,9 @@ export default function Profile() {
                                 <div className="flex-1">
                                   <p className="font-bold text-gray-800">{cls.name}</p>
                                   <div className="flex flex-wrap gap-3 mt-1 text-xs font-medium text-gray-500">
-                                    <span className="flex items-center gap-1"><span className="text-gray-400">Тип:</span> {cls.type}</span>
-                                    <span className="flex items-center gap-1"><span className="text-gray-400">Группа:</span> {cls.group}</span>
-                                    <span className="flex items-center gap-1"><span className="text-gray-400">Ауд:</span> {cls.room}</span>
+                                    <span className="flex items-center gap-1"><span className="text-gray-400">{t('profile.schedule.type')}</span> {cls.type}</span>
+                                    <span className="flex items-center gap-1"><span className="text-gray-400">{t('profile.schedule.group')}</span> {cls.group}</span>
+                                    <span className="flex items-center gap-1"><span className="text-gray-400">{t('profile.schedule.room')}</span> {cls.room}</span>
                                   </div>
                                 </div>
                               </div>
@@ -424,7 +450,7 @@ export default function Profile() {
                   {rewards.map(r => (
                     <div key={r.id} className="p-4 border-l-4 border-green-500 bg-green-50/50 rounded-r-xl">
                       <p className="font-bold text-green-800 mb-1">{r.description}</p>
-                      <p className="text-xs text-green-600">{t('profile.records.issued')} {new Date(r.created_at).toLocaleDateString('ru-RU')} | {t('profile.records.author')} {r.author_name}</p>
+                      <p className="text-xs text-green-600">{t('profile.records.issued')} {new Date(r.created_at).toLocaleDateString(dateLocale)} | {t('profile.records.author')} {r.author_name}</p>
                     </div>
                   ))}
                   {rewards.length === 0 && <p className="text-center text-gray-400 py-10">{t('profile.records.empty_rewards')}</p>}
@@ -436,7 +462,7 @@ export default function Profile() {
                   {reprimands.map(r => (
                     <div key={r.id} className="p-4 border-l-4 border-red-500 bg-red-50/50 rounded-r-xl">
                       <p className="font-bold text-red-800 mb-1">{r.description}</p>
-                      <p className="text-xs text-red-600">{t('profile.records.issued')} {new Date(r.created_at).toLocaleDateString('ru-RU')} | {t('profile.records.author')} {r.author_name}</p>
+                      <p className="text-xs text-red-600">{t('profile.records.issued')} {new Date(r.created_at).toLocaleDateString(dateLocale)} | {t('profile.records.author')} {r.author_name}</p>
                     </div>
                   ))}
                   {reprimands.length === 0 && <p className="text-center text-green-600 font-medium py-10">{t('profile.records.empty_reprimands')}</p>}

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { useTranslation } from 'react-i18next'; // ПОДКЛЮЧЕНО
+import { useTranslation } from 'react-i18next';
 
 export default function Tasks() {
   const navigate = useNavigate();
-  const { t } = useTranslation(); // ИНИЦИАЛИЗАЦИЯ ПЕРЕВОДЧИКА
+  const { t, i18n } = useTranslation();
 
   const [currentUser, setCurrentUser] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -26,6 +26,8 @@ export default function Tasks() {
     title: '', description: '', deadline: '', assignee_ids: [], target_department_ids: []
   });
 
+  const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
+
   const fetchData = async () => {
     try {
       const [meRes, tasksRes, usersRes, deptsRes, analyticsRes] = await Promise.all([
@@ -41,7 +43,7 @@ export default function Tasks() {
       setTasks(tasksRes.data);
       setUsers(usersRes.data);
       setDepartments(deptsRes.data);
-      if(analyticsRes.data) setAnalytics(analyticsRes.data);
+      if (analyticsRes.data) setAnalytics(analyticsRes.data);
 
       if (user.is_rectorate) setActiveTab('all');
     } catch (error) {
@@ -68,11 +70,17 @@ export default function Tasks() {
     const taskId = e.dataTransfer.getData('taskId');
     if (!taskId) return;
 
-    const task = tasks.find(t => t.id === parseInt(taskId));
+    const task = tasks.find(item => item.id === parseInt(taskId));
     if (!task || task.status === newStatus) return;
 
+    // Если пытаются завершить задачу перетаскиванием, а у неё есть открытые подзадачи — блокируем
+    if (newStatus === 'completed' && task.subtasks?.some(s => s.status !== 'completed')) {
+      alert(t('task_detail.subtasks.incomplete_warning'));
+      return;
+    }
+
     const originalTasks = [...tasks];
-    setTasks(tasks.map(t => t.id === parseInt(taskId) ? { ...t, status: newStatus } : t));
+    setTasks(tasks.map(item => item.id === parseInt(taskId) ? { ...item, status: newStatus } : item));
 
     try {
       await api.patch(`/tasks/${taskId}/`, { status: newStatus });
@@ -80,7 +88,7 @@ export default function Tasks() {
     } catch (error) {
       setTasks(originalTasks);
       let errMsg = t('tasks.errors.status_change');
-      if (error.response && error.response.data && error.response.data.status) {
+      if (error.response?.data?.status) {
         errMsg = error.response.data.status[0];
       }
       alert(errMsg);
@@ -92,19 +100,23 @@ export default function Tasks() {
     let filtered = [...tasks];
 
     if (activeTab === 'my_tasks') {
-      filtered = filtered.filter(t => t.assignees.some(a => a.id === currentUser.id));
+      // ИСПРАВЛЕНО: Включаем как личные задачи, так и общие задачи на кафедру сотрудника
+      filtered = filtered.filter(item => 
+        item.assignees?.some(a => a.id === currentUser.id) ||
+        (currentUser.department && item.target_departments?.some(d => d.id === currentUser.department))
+      );
     } else if (activeTab === 'delegated') {
-      filtered = filtered.filter(t => t.creator.id === currentUser.id);
+      filtered = filtered.filter(item => item.creator?.id === currentUser.id);
     } else if (activeTab === 'dept_all' && currentUser.department) {
-      filtered = filtered.filter(t => 
-        t.target_departments.some(d => d.id === currentUser.department) ||
-        t.assignees.some(a => a.department === currentUser.department)
+      filtered = filtered.filter(item => 
+        item.target_departments?.some(d => d.id === currentUser.department) ||
+        item.assignees?.some(a => a.department === currentUser.department)
       );
     }
 
-    if (filterCreator) filtered = filtered.filter(t => t.creator.id === parseInt(filterCreator));
-    if (filterAssignee) filtered = filtered.filter(t => t.assignees.some(a => a.id === parseInt(filterAssignee)));
-    if (filterDept) filtered = filtered.filter(t => t.target_departments.some(d => d.id === parseInt(filterDept)));
+    if (filterCreator) filtered = filtered.filter(item => item.creator?.id === parseInt(filterCreator));
+    if (filterAssignee) filtered = filtered.filter(item => item.assignees?.some(a => a.id === parseInt(filterAssignee)));
+    if (filterDept) filtered = filtered.filter(item => item.target_departments?.some(d => d.id === parseInt(filterDept)));
     
     return filtered;
   };
@@ -122,7 +134,8 @@ export default function Tasks() {
       setNewTask({ title: '', description: '', deadline: '', assignee_ids: [], target_department_ids: [] });
       fetchData(); 
     } catch (error) {
-      setCreateError(t('tasks.modal.error_create'));
+      const backendErr = error.response?.data?.assignee_ids?.[0] || t('tasks.modal.error_create');
+      setCreateError(backendErr);
     }
   };
 
@@ -130,6 +143,24 @@ export default function Tasks() {
 
   const filteredTasks = getFilteredTasks();
   const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
+  const canAssignDepartments = currentUser.is_rectorate || ['dean', 'deputy_dean'].includes(currentUser.position);
+
+  // ИСПРАВЛЕНО: Строгая фильтрация подчиненных по иерархии
+  const subordinateUsers = users.filter(u => {
+    if (u.id === currentUser.id) return false;
+    if (currentUser.is_rectorate) return true;
+    if (u.is_rectorate) return false;
+    if (['dean', 'deputy_dean'].includes(currentUser.position)) {
+      return u.position !== 'dean';
+    }
+    if (currentUser.position === 'head_of_department') {
+      return (
+        u.department === currentUser.department &&
+        !['dean', 'deputy_dean', 'head_of_department'].includes(u.position)
+      );
+    }
+    return false;
+  });
 
   const columns = [
     { id: 'created', title: t('tasks.columns.created'), bg: 'bg-gray-100', text: 'text-gray-700' },
@@ -161,7 +192,7 @@ export default function Tasks() {
                 {t('tasks.tabs.dept_all')}
               </button>
             )}
-            {currentUser.is_rectorate && (
+            {(currentUser.is_rectorate || ['dean', 'deputy_dean'].includes(currentUser.position)) && (
               <button onClick={() => setActiveTab('all')} className={`pb-2 font-bold text-sm transition-colors ${activeTab === 'all' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>
                 {t('tasks.tabs.all')}
               </button>
@@ -180,7 +211,7 @@ export default function Tasks() {
             {users.map(u => <option key={u.id} value={u.id}>{u.last_name} {u.first_name}</option>)}
           </select>
 
-          {currentUser.is_rectorate && (
+          {canAssignDepartments && (
             <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none">
               <option value="">{t('tasks.filters.dept_all')}</option>
               {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -197,7 +228,7 @@ export default function Tasks() {
 
       <div className="flex overflow-x-auto gap-4 h-[calc(100vh-220px)] items-start">
         {columns.map(col => {
-          let tasksInCol = filteredTasks.filter(t => t.status === col.id);
+          let tasksInCol = filteredTasks.filter(item => item.status === col.id);
           tasksInCol.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
           
           const totalTasks = tasksInCol.length;
@@ -232,7 +263,7 @@ export default function Tasks() {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-600' : 'text-gray-400'}`}>
-                          {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          {new Date(task.deadline).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}
                         </span>
                         <div className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded" title={t('tasks.card.creator')}>
                           {task.creator?.last_name}
@@ -249,7 +280,14 @@ export default function Tasks() {
                           ))}
                           {task.assignees?.length === 0 && <span className="text-[9px] bg-red-50 text-red-600 px-1.5 rounded-full border border-red-100">{t('tasks.card.department')}</span>}
                         </div>
-                        {task.revision_count > 0 && <span className="text-[9px] text-red-500 font-bold bg-red-50 px-1.5 rounded">{t('tasks.card.revisions')} {task.revision_count}</span>}
+                        <div className="flex items-center gap-1">
+                          {task.subtasks?.length > 0 && (
+                            <span className="text-[9px] text-indigo-600 font-bold bg-indigo-50 px-1.5 rounded">
+                              {task.subtasks.filter(s => s.status === 'completed').length}/{task.subtasks.length}
+                            </span>
+                          )}
+                          {task.revision_count > 0 && <span className="text-[9px] text-red-500 font-bold bg-red-50 px-1.5 rounded">{t('tasks.card.revisions')} {task.revision_count}</span>}
+                        </div>
                       </div>
                     </div>
                   );
@@ -304,16 +342,20 @@ export default function Tasks() {
                       <span>{t('tasks.modal.assignees_label')}</span>
                     </label>
                     <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-28" value={newTask.assignee_ids} onChange={e => setNewTask({...newTask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
-                      {users.map(u => {
+                      {subordinateUsers.map(u => {
                         const stats = analytics?.employees?.find(emp => emp.id === u.id);
-                        // ИСПРАВЛЕНИЕ: Убрал эмодзи огонька из статистики сотрудника при создании задачи
-                        const statLabel = stats ? ` | Актив: ${stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision}` : '';
-                        return <option key={u.id} value={u.id} className="py-1 border-b border-gray-50 text-sm">{u.last_name} {u.first_name} {statLabel}</option>;
+                        const activeLoad = stats ? (stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision) : 0;
+                        const statLabel = stats ? ` | ${t('tasks.modal.active_load')} ${activeLoad}` : '';
+                        return (
+                          <option key={u.id} value={u.id} className="py-1 border-b border-gray-50 text-sm">
+                            {u.last_name} {u.first_name} ({t(`profile.positions.${u.position}`, { defaultValue: u.position_display })}){statLabel}
+                          </option>
+                        );
                       })}
                     </select>
                   </div>
                 </div>
-                {currentUser.is_rectorate && (
+                {canAssignDepartments && (
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between"><span>{t('tasks.modal.target_dept_label')}</span></label>
                     <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" value={newTask.target_department_ids} onChange={e => setNewTask({...newTask, target_department_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
