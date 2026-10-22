@@ -6,6 +6,19 @@
     "profile": "My Profile",
     "logout": "Logout"
   },
+  "notifications": {
+    "title": "Notifications",
+    "mark_all_read": "Mark all as read",
+    "empty": "No notifications",
+    "all": "All",
+    "unread": "Unread",
+    "new_task": "New task assigned to you",
+    "task_revision": "Task returned for revision",
+    "task_on_review": "Task is waiting for your review",
+    "task_completed": "Task accepted and completed",
+    "new_reward": "New achievement in personnel file",
+    "new_reprimand": "New reprimand in personnel file"
+  },
   "dashboard": {
     "welcome": "Welcome back",
     "panel_institute": "Institute Dashboard",
@@ -79,8 +92,10 @@
     "phone": "Phone",
     "email": "Email",
     "employment_date": "Hire Date",
-    "issue_record": "Achievement / Reprimand",
+    "issue_record": "+ Achievement / Reprimand",
     "attendance": "Attendance",
+    "check_in_btn": "Check In at Work",
+    "checked_in_today": "Checked in for today",
     "on_time": "On Time",
     "late": "Late",
     "no_data": "No Data",
@@ -113,16 +128,43 @@
     },
     "positions": {
       "rector": "Rector",
+      "prorector": "Vice Rector",
       "vice_rector_academic": "Vice Rector for Academic Affairs",
       "vice_rector_science": "Vice Rector for Science",
       "dean": "Dean",
+      "deputy_dean": "Deputy Dean",
       "head_of_department": "Head of Department",
       "none": "No administrative position"
+    },
+    "work_statuses": {
+      "working": "Working (Active)",
+      "vacation": "On Vacation",
+      "sick": "On Sick Leave",
+      "trip": "On Business Trip",
+      "business_trip": "On Business Trip"
+    },
+    "teaching_statuses": {
+      "lab_assistant": "Lab Assistant",
+      "senior_lab": "Senior Lab Assistant",
+      "junior_teacher": "Junior Teacher",
+      "assistant": "Assistant",
+      "teacher": "Teacher",
+      "senior_teacher": "Senior Teacher",
+      "docent": "Docent",
+      "professor": "Professor"
+    },
+    "academic_degrees": {
+      "none": "No Degree",
+      "master": "Master's Degree",
+      "candidate": "Candidate of Sciences",
+      "doctor": "Doctor of Sciences",
+      "phd": "PhD"
     }
   },
   "tasks": {
     "loading": "Loading board...",
     "title": "Task Manager",
+    "not_found": "No tasks found with this status.",
     "tabs": {
       "my_tasks": "My Tasks",
       "delegated": "Delegated by Me",
@@ -130,11 +172,17 @@
       "all": "All Institute Tasks"
     },
     "filters": {
+      "all": "All",
+      "created": "Created",
+      "in_progress": "In Progress",
+      "revision": "Revision",
+      "on_review": "On Review",
+      "completed": "Completed",
       "creator_all": "Creator: All",
       "assignee_all": "Assignee: All",
       "dept_all": "Department: All"
     },
-    "create_btn": "Create Task",
+    "create_btn": "+ Create Task",
     "columns": {
       "created": "Created",
       "in_progress": "In Progress",
@@ -180,12 +228,25 @@
     "not_found": "Task not found",
     "back": "Back",
     "overdue": "OVERDUE",
+    "parent_task_link": "Parent Task:",
     "actions": {
       "processing": "Processing...",
       "take_in_progress": "Take in Progress",
       "send_to_review": "Send to Review",
       "accept": "Accept (Complete)",
       "return_revision": "Return for Revision"
+    },
+    "quality_modal": {
+      "title": "Rate Work Quality",
+      "subtitle": "Select a score from 1 to 5 before completing the task",
+      "confirm": "Confirm & Complete"
+    },
+    "subtasks": {
+      "title": "Subtasks",
+      "add_btn": "+ Add Subtask",
+      "progress": "Completed",
+      "empty": "No subtasks yet. You can break this task down into steps.",
+      "modal_title": "Create Subtask"
     },
     "timeline": {
       "title": "Delay Timeline",
@@ -217,5 +278,23 @@
       "no_assignees": "Unassigned",
       "target_depts": "Target Departments"
     }
+  },
+  "departments": {
+    "loading": "Loading institute structure...",
+    "structure": "Structure",
+    "not_found": "No departments found",
+    "select_dept": "Select a department",
+    "staff_count": "Staff members:",
+    "card": {
+      "status": "Status:",
+      "email": "Email:",
+      "phone": "Phone:",
+      "hours": "Working hours:",
+      "hired": "Hired:",
+      "working": "Working",
+      "none": "—"
+    },
+    "view_profile": "View Personnel File",
+    "empty_staff": "No employees assigned to this department"
   }
 }

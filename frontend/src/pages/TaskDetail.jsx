@@ -13,6 +13,9 @@ export default function TaskDetail() {
   
   const [currentUser, setCurrentUser] = useState(null);
   const [task, setTask] = useState(null);
+  const [subtasks, setSubtasks] = useState([]);
+  const [parentTask, setParentTask] = useState(null);
+  const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,17 +25,47 @@ export default function TaskDetail() {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
+  // Состояния для модального окна оценки качества (1-5 звезд)
+  const [showQualityModal, setShowQualityModal] = useState(false);
+  const [qualityScore, setQualityScore] = useState(5);
+
+  // Состояния для модального окна создания подзадачи
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [newSubtask, setNewSubtask] = useState({
+    title: '',
+    description: '',
+    deadline: '',
+    assignee_ids: []
+  });
+  const [creatingSubtask, setCreatingSubtask] = useState(false);
+
   const fetchTaskData = async () => {
     try {
-      const [meRes, taskRes, reportsRes] = await Promise.all([
+      const [meRes, taskRes, allTasksRes, usersRes, reportsRes] = await Promise.all([
         api.get('/users/me/'),
         api.get(`/tasks/${id}/`),
+        api.get('/tasks/').catch(() => ({ data: [] })),
+        api.get('/users/').catch(() => ({ data: [] })),
         api.get(`/reports/?task=${id}`).catch(() => ({ data: [] }))
       ]);
       
+      const currentTask = taskRes.data;
       setCurrentUser(meRes.data);
-      setTask(taskRes.data);
-      setReports(taskRes.data.reports || reportsRes.data || []);
+      setTask(currentTask);
+      setUsers(usersRes.data);
+      setReports(currentTask.reports || reportsRes.data || []);
+
+      // Фильтруем дочерние подзадачи и находим родительскую задачу
+      const allTasks = allTasksRes.data || [];
+      const childTasks = currentTask.subtasks || allTasks.filter(item => item.parent_task === Number(id));
+      setSubtasks(childTasks);
+
+      if (currentTask.parent_task) {
+        const foundParent = allTasks.find(item => item.id === currentTask.parent_task);
+        setParentTask(foundParent || { id: currentTask.parent_task, title: `#${currentTask.parent_task}` });
+      } else {
+        setParentTask(null);
+      }
       
     } catch (error) {
       console.error("Ошибка загрузки задачи:", error);
@@ -45,18 +78,47 @@ export default function TaskDetail() {
     fetchTaskData();
   }, [id]);
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, score = null) => {
     if (isChangingStatus) return; 
     setIsChangingStatus(true);
     
     try {
-      await api.patch(`/tasks/${id}/`, { status: newStatus });
+      const payload = { status: newStatus };
+      if (score !== null) {
+        payload.quality_score = score;
+      }
+      await api.patch(`/tasks/${id}/`, payload);
+      setShowQualityModal(false);
       await fetchTaskData(); 
     } catch (error) {
       alert(t('tasks.errors.status_change'));
       console.error(error);
     } finally {
       setIsChangingStatus(false); 
+    }
+  };
+
+  const handleCreateSubtask = async (e) => {
+    e.preventDefault();
+    if (newSubtask.assignee_ids.length === 0) {
+      alert(t('tasks.modal.error_assignee'));
+      return;
+    }
+    setCreatingSubtask(true);
+    try {
+      await api.post('/tasks/', {
+        ...newSubtask,
+        parent_task: task.id,
+        creator_id: currentUser.id
+      });
+      setShowSubtaskModal(false);
+      setNewSubtask({ title: '', description: '', deadline: '', assignee_ids: [] });
+      await fetchTaskData();
+    } catch (error) {
+      alert(t('tasks.modal.error_create'));
+      console.error(error);
+    } finally {
+      setCreatingSubtask(false);
     }
   };
 
@@ -130,14 +192,27 @@ export default function TaskDetail() {
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
   const isAssignee = task.assignees?.some(a => a.id === currentUser.id);
-  const isCreator = task.creator?.id === currentUser.id; 
+  const isCreator = task.creator?.id === currentUser.id;
+  const canManageSubtasks = isCreator || isAssignee || currentUser.is_manager || currentUser.is_rectorate;
+
+  const completedSubtasksCount = subtasks.filter(s => s.status === 'completed').length;
+  const subtaskProgress = subtasks.length > 0 ? Math.round((completedSubtasksCount / subtasks.length) * 100) : 0;
 
   return (
     <div className="max-w-6xl mx-auto pb-10 space-y-6">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline text-sm font-medium">
           &larr; {t('task_detail.back')}
         </button>
+
+        {parentTask && (
+          <Link 
+            to={`/tasks/${parentTask.id}`}
+            className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition"
+          >
+            {t('task_detail.parent_task_link')} {parentTask.title}
+          </Link>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col lg:flex-row justify-between items-start gap-6">
@@ -149,7 +224,6 @@ export default function TaskDetail() {
               task.status === 'revision' ? 'bg-red-100 text-red-700' :
               'bg-yellow-100 text-yellow-700'
             }`}>
-              {/* ИСПРАВЛЕНО: ТЕПЕРЬ СТАТУС БЕРЕТСЯ ИЗ СЛОВАРЯ I18N */}
               {t(`tasks.status.${task.status}`)}
             </span>
             {isOverdue && (
@@ -184,7 +258,7 @@ export default function TaskDetail() {
             <>
               <button 
                 disabled={isChangingStatus}
-                onClick={() => handleStatusChange('completed')} 
+                onClick={() => setShowQualityModal(true)} 
                 className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}
               >
                 {t('task_detail.actions.accept')}
@@ -204,6 +278,83 @@ export default function TaskDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <div className="lg:col-span-2 space-y-6">
+
+          {/* БЛОК ПОДЗАДАЧ (SUBTASKS) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg">
+                  {t('task_detail.subtasks.title')} ({completedSubtasksCount}/{subtasks.length})
+                </h3>
+              </div>
+              {canManageSubtasks && task.status !== 'completed' && (
+                <button
+                  onClick={() => setShowSubtaskModal(true)}
+                  className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                >
+                  {t('task_detail.subtasks.add_btn')}
+                </button>
+              )}
+            </div>
+
+            {subtasks.length > 0 ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                    <span>{t('task_detail.subtasks.progress')}</span>
+                    <span>{subtaskProgress}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-500 transition-all duration-300" 
+                      style={{ width: `${subtaskProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                  {subtasks.map(sub => (
+                    <div 
+                      key={sub.id}
+                      onClick={() => navigate(`/tasks/${sub.id}`)}
+                      className="p-3.5 bg-white hover:bg-gray-50 transition cursor-pointer flex items-center justify-between gap-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-bold text-sm truncate ${sub.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                          {sub.title}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(sub.deadline).toLocaleDateString('ru-RU')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex -space-x-1">
+                          {sub.assignees?.slice(0, 2).map((a, idx) => (
+                            <div key={idx} className="w-6 h-6 rounded-full bg-blue-100 border border-white flex items-center justify-center text-[10px] font-bold text-blue-700" title={`${a.last_name} ${a.first_name}`}>
+                              {a.last_name?.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                          sub.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          sub.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {t(`tasks.status.${sub.status}`)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 text-sm py-6 border-2 border-dashed border-gray-100 rounded-xl">
+                {t('task_detail.subtasks.empty')}
+              </div>
+            )}
+          </div>
+
+          {/* ТАЙМЛАЙН ЗАДЕРЖЕК */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-bold text-gray-800 text-lg mb-1">{t('task_detail.timeline.title')}</h3>
             <p className="text-sm text-gray-500 mb-6">{t('task_detail.timeline.subtitle')}</p>
@@ -248,6 +399,7 @@ export default function TaskDetail() {
             )}
           </div>
 
+          {/* ОТЧЕТЫ И КОММЕНТАРИИ */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
               <h3 className="font-bold text-gray-800 text-lg">{t('task_detail.reports.title')}</h3>
@@ -304,7 +456,9 @@ export default function TaskDetail() {
                           onClick={(e) => handleDownload(e, rep.attached_file)}
                           className="inline-flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-100 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-left"
                         >
-                          <span className="font-bold text-lg">📎</span> 
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
                           <span>{t('task_detail.reports.download_file')}</span>
                         </button>
                       </div>
@@ -318,6 +472,7 @@ export default function TaskDetail() {
           </div>
         </div>
 
+        {/* ПРАВАЯ КОЛОНКА: ИНФОРМАЦИЯ */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3 mb-4">{t('task_detail.info.title')}</h3>
@@ -385,6 +540,121 @@ export default function TaskDetail() {
           </div>
         </div>
       </div>
+
+      {/* МОДАЛЬНОЕ ОКНО: ОЦЕНКА КАЧЕСТВА (1-5 ЗВЕЗД) */}
+      {showQualityModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-5">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-800 text-lg">{t('task_detail.quality_modal.title')}</h3>
+              <button onClick={() => setShowQualityModal(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <p className="text-sm text-gray-500">{t('task_detail.quality_modal.subtitle')}</p>
+            
+            <div className="flex justify-center gap-3 py-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setQualityScore(star)}
+                  className={`w-12 h-12 rounded-xl font-black text-xl transition-all border ${
+                    qualityScore >= star 
+                      ? 'bg-yellow-400 text-white border-yellow-500 shadow-md scale-105' 
+                      : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button 
+                type="button" 
+                onClick={() => setShowQualityModal(false)} 
+                className="px-4 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-100"
+              >
+                {t('tasks.modal.cancel')}
+              </button>
+              <button 
+                type="button" 
+                disabled={isChangingStatus}
+                onClick={() => handleStatusChange('completed', qualityScore)} 
+                className="px-5 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-md"
+              >
+                {t('task_detail.quality_modal.confirm')} ({qualityScore}/5)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО: СОЗДАНИЕ ПОДЗАДАЧИ */}
+      {showSubtaskModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 text-lg">{t('task_detail.subtasks.modal_title')}</h3>
+              <button onClick={() => setShowSubtaskModal(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={handleCreateSubtask} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.name_label')}</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={newSubtask.title} 
+                  onChange={e => setNewSubtask({...newSubtask, title: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.desc_label')}</label>
+                <textarea 
+                  rows="3" 
+                  required 
+                  value={newSubtask.description} 
+                  onChange={e => setNewSubtask({...newSubtask, description: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+                ></textarea>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.deadline_label')}</label>
+                <input 
+                  type="datetime-local" 
+                  required 
+                  value={newSubtask.deadline} 
+                  onChange={e => setNewSubtask({...newSubtask, deadline: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.assignees_label')}</label>
+                <select 
+                  multiple 
+                  value={newSubtask.assignee_ids} 
+                  onChange={e => setNewSubtask({...newSubtask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-28"
+                >
+                  {users.map(u => (
+                    <option key={u.id} value={u.id} className="py-1 text-sm">
+                      {u.last_name} {u.first_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowSubtaskModal(false)} className="px-4 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-100">
+                  {t('tasks.modal.cancel')}
+                </button>
+                <button type="submit" disabled={creatingSubtask} className="px-5 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md">
+                  {t('tasks.modal.create')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

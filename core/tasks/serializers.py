@@ -17,7 +17,6 @@ class TaskReportSerializer(serializers.ModelSerializer):
     author = UserMiniSerializer(read_only=True)
     class Meta:
         model = TaskReport
-        # Используем правильные названия: comment, attached_file, submitted_at
         fields = ['id', 'task', 'author', 'comment', 'attached_file', 'submitted_at']
         read_only_fields = ['author']
 
@@ -29,15 +28,22 @@ class TaskStatusLogSerializer(serializers.ModelSerializer):
         model = TaskStatusLog
         fields = ['id', 'status', 'status_display', 'entered_at', 'exited_at', 'hours_spent']
 
+# НОВОЕ: Сериализатор для отображения списка подзадач внутри родительской задачи
+class SubtaskSerializer(serializers.ModelSerializer):
+    assignees = UserMiniSerializer(many=True, read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Task
+        fields = ['id', 'title', 'status', 'status_display', 'deadline', 'assignees', 'quality_score']
+
 class TaskSerializer(serializers.ModelSerializer):
     creator = UserMiniSerializer(read_only=True)
-    # Для чтения отдаем красивые объекты
     assignees = UserMiniSerializer(many=True, read_only=True)
     target_departments = DepartmentMiniSerializer(many=True, read_only=True)
     status_logs = TaskStatusLogSerializer(many=True, read_only=True)
+    subtasks = SubtaskSerializer(many=True, read_only=True)
     
-    # ИСПРАВЛЕНИЕ: Переименовали ключи, чтобы они совпадали с фронтендом 
-    # (убрали букву 's' перед '_ids')
     assignee_ids = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), 
         source='assignees',
@@ -61,9 +67,9 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'id', 'title', 'description', 'parent_task', 
-            'creator', 'assignees', 'assignee_ids',  # Обновили название здесь
-            'target_departments', 'target_department_ids', # И здесь
+            'id', 'title', 'description', 'parent_task', 'subtasks',
+            'creator', 'assignees', 'assignee_ids',
+            'target_departments', 'target_department_ids',
             'status', 'status_display', 
             'created_at', 'deadline', 'completed_at', 
             'revision_count', 'quality_score', 'reports', 'status_logs'
@@ -84,15 +90,12 @@ class TaskSerializer(serializers.ModelSerializer):
             if user.is_rectorate or is_creator:
                 return value
                 
-            # 2. Если мы дошли сюда, значит пользователь — ИСПОЛНИТЕЛЬ 
-            # (Преподаватель, или Завкафедрой, выполняющий задачу Ректора).
-            # Оставляем им только права исполнителя:
+            # 2. Права исполнителя
             if old_status == 'created' and value == 'in_progress':
                 return value
             if old_status in ['in_progress', 'revision'] and value == 'on_review':
                 return value
                 
-            # Блокируем всё остальное
             raise serializers.ValidationError("Вы являетесь исполнителем этой задачи. Вы можете только брать её в работу или отправлять на проверку.")
             
         return value

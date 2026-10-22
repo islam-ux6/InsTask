@@ -23,6 +23,9 @@ export default function Profile() {
   const [recordData, setRecordData] = useState({ record_type: 'reward', description: '' });
   const [submittingRecord, setSubmittingRecord] = useState(false);
 
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -57,6 +60,36 @@ export default function Profile() {
     fetchData();
   }, [id]);
 
+  // Смена рабочего статуса (Работает / В отпуске / На больничном / В командировке)
+  const handleWorkStatusChange = async (newWorkStatus) => {
+    setUpdatingStatus(true);
+    try {
+      const res = await api.patch(`/users/${user.id}/`, { work_status: newWorkStatus });
+      setUser(res.data);
+    } catch (err) {
+      alert('Ошибка при обновлении статуса сотрудника');
+      console.error(err);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  // Отметка посещаемости за сегодня
+  const handleCheckIn = async () => {
+    setCheckingIn(true);
+    try {
+      await api.post('/users/checkin/');
+      const updatedRes = await api.get('/users/me/');
+      setUser(updatedRes.data);
+      setCurrentUser(updatedRes.data);
+    } catch (err) {
+      alert('Не удалось отметить явку. Проверьте подключение.');
+      console.error(err);
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
   const handleCreateRecord = async (e) => {
     e.preventDefault();
     setSubmittingRecord(true);
@@ -80,15 +113,16 @@ export default function Profile() {
     }
   };
 
-  if (loading) return <div className="text-gray-500 p-8 flex justify-center mt-10">Загрузка профиля...</div>;
+  if (loading) return <div className="text-gray-500 p-8 flex justify-center mt-10">{t('task_detail.loading')}</div>;
   if (error) return <div className="text-red-500 p-8 text-center bg-red-50 rounded-lg mx-auto max-w-lg mt-10">{error}</div>;
   if (!user || !currentUser) return <div className="text-red-500 p-8">Ошибка загрузки</div>;
 
   const rewards = user.records?.filter(r => r.record_type === 'reward') || [];
   const reprimands = user.records?.filter(r => r.record_type === 'reprimand') || [];
-  const isMyProfile = !id;
+  const isMyProfile = !id || Number(id) === currentUser.id;
 
   const canIssueRecords = (currentUser.is_manager || currentUser.is_rectorate) && !isMyProfile;
+  const canEditWorkStatus = currentUser.is_manager || currentUser.is_rectorate || isMyProfile;
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
@@ -101,11 +135,12 @@ export default function Profile() {
   const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
   const formatDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const todayObj = new Date();
+  const todayStr = formatDate(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
+  const isCheckedInToday = Boolean(user.attendance_history && user.attendance_history[todayStr]);
 
   const getDayStatus = (day) => {
     const dateStr = formatDate(year, month, day);
-    const todayStr = formatDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-
     const dayOfWeek = new Date(year, month, day).getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend';
     if (dateStr > todayStr) return 'future';
@@ -166,17 +201,18 @@ export default function Profile() {
             
             <div className="flex flex-col gap-2 px-4">
               <div className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-purple-100">
-                {user.teaching_status_display || t('profile.teacher')}
+                {t(`profile.teaching_statuses.${user.teaching_status}`, { defaultValue: user.teaching_status_display || t('profile.teacher') })}
               </div>
-              {/* ИСПРАВЛЕНИЕ ДОЛЖНОСТИ */}
+              
               {user.position && user.position !== 'none' && (
                 <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-blue-100">
-                  {t(`profile.positions.${user.position}`) || user.position_display}
+                  {t(`profile.positions.${user.position}`, { defaultValue: user.position_display })}
                 </div>
               )}
-              {user.academic_degree_display && !user.academic_degree_display.includes('Нет') && (
+              
+              {user.academic_degree && user.academic_degree !== 'none' && (
                 <div className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100">
-                  {user.academic_degree_display}
+                  {t(`profile.academic_degrees.${user.academic_degree}`, { defaultValue: user.academic_degree_display })}
                 </div>
               )}
             </div>
@@ -196,9 +232,25 @@ export default function Profile() {
             <div className="space-y-4">
               <div>
                 <p className="text-xs text-gray-500 mb-1">{t('profile.work_status')}</p>
-                <p className={`font-semibold ${user.work_status === 'working' ? 'text-green-600' : 'text-orange-500'}`}>
-                  {user.work_status === 'working' ? t('profile.active') : user.work_status_display || t('profile.unknown')}
-                </p>
+                {canEditWorkStatus ? (
+                  <select
+                    disabled={updatingStatus}
+                    value={user.work_status || 'working'}
+                    onChange={(e) => handleWorkStatusChange(e.target.value)}
+                    className={`w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${
+                      user.work_status === 'working' ? 'text-green-700 bg-green-50/50' : 'text-orange-600 bg-orange-50/50'
+                    }`}
+                  >
+                    <option value="working">{t('profile.work_statuses.working')}</option>
+                    <option value="vacation">{t('profile.work_statuses.vacation')}</option>
+                    <option value="sick">{t('profile.work_statuses.sick')}</option>
+                    <option value="trip">{t('profile.work_statuses.trip')}</option>
+                  </select>
+                ) : (
+                  <p className={`font-semibold ${user.work_status === 'working' ? 'text-green-600' : 'text-orange-500'}`}>
+                    {t(`profile.work_statuses.${user.work_status}`, { defaultValue: user.work_status_display || t('profile.unknown') })}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">{t('profile.department')}</p>
@@ -244,6 +296,25 @@ export default function Profile() {
                 <button onClick={nextMonth} className="text-gray-400 hover:text-gray-800 font-bold px-2 rounded hover:bg-gray-100">&gt;</button>
               </div>
             </div>
+
+            {/* КНОПКА ОТМЕТКИ ПОСЕЩАЕМОСТИ */}
+            {isMyProfile && (
+              <div className="mb-4">
+                {!isCheckedInToday ? (
+                  <button
+                    onClick={handleCheckIn}
+                    disabled={checkingIn}
+                    className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-xl text-xs font-bold transition shadow-sm"
+                  >
+                    {t('profile.check_in_btn')}
+                  </button>
+                ) : (
+                  <div className="w-full py-2 px-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold text-center">
+                    {t('profile.checked_in_today')}
+                  </div>
+                )}
+              </div>
+            )}
             
             <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 mb-3 justify-center">
               <span className="flex items-center"><div className="w-2.5 h-2.5 bg-green-200 border border-green-300 rounded-sm mr-1"></div> {t('profile.on_time')}</span>
@@ -259,8 +330,7 @@ export default function Profile() {
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1;
                 const status = getDayStatus(day);
-                const today = new Date();
-                const isToday = year === today.getFullYear() && month === today.getMonth() && day === today.getDate();
+                const isToday = year === todayObj.getFullYear() && month === todayObj.getMonth() && day === todayObj.getDate();
 
                 return (
                   <div 
@@ -327,7 +397,6 @@ export default function Profile() {
               {activeTab === 'tasks' && (
                 <div className="flex flex-col h-full">
                   <div className="flex flex-wrap gap-2 mb-6">
-                    {/* ИСПРАВЛЕНИЕ: ПЕРЕВОД ФИЛЬТРОВ ИСПОЛЬЗУЕТ t() */}
                     {['all', 'created', 'in_progress', 'revision', 'on_review', 'completed'].map(f => (
                       <button key={f} onClick={() => setTaskFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${taskFilter === f ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                         {t(`tasks.filters.${f}`)}
@@ -339,7 +408,6 @@ export default function Profile() {
                       <div key={task.id} onClick={() => navigate(`/tasks/${task.id}`)} className="p-4 border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-300 transition cursor-pointer group bg-white flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{task.title}</h4>
-                          {/* ИСПРАВЛЕНИЕ СТАТУСА: ИСПОЛЬЗУЕМ I18N ВМЕСТО STATUS_DISPLAY */}
                           <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-gray-100 text-gray-700">
                             {t(`tasks.status.${task.status}`)}
                           </span>

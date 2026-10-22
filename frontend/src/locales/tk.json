@@ -6,6 +6,19 @@
     "profile": "Meniň profilim",
     "logout": "Çykmak"
   },
+  "notifications": {
+    "title": "Duýduryşlar",
+    "mark_all_read": "Ählisini okaldy diýip belle",
+    "empty": "Täze duýduryş ýok",
+    "all": "Ählisi",
+    "unread": "Okalmadyklar",
+    "new_task": "Size täze tabşyryk bellenildi",
+    "task_revision": "Tabşyryk kämilleşdirmäge gaýtaryldy",
+    "task_on_review": "Tabşyryk siziň barlagyňyza garaşýar",
+    "task_completed": "Tabşyryk kabul edildi we tamamlandy",
+    "new_reward": "Şahsy jilde täze sylag goşuldy",
+    "new_reprimand": "Şahsy jilde täze käýinç goşuldy"
+  },
   "dashboard": {
     "welcome": "Hoş geldiňiz",
     "panel_institute": "Institut dolandyryş paneli",
@@ -79,8 +92,10 @@
     "phone": "Telefon",
     "email": "Email",
     "employment_date": "Işe kabul edilen senesi",
-    "issue_record": "Sylag / Käýinç",
+    "issue_record": "+ Sylag / Käýinç",
     "attendance": "Gatnaşyk",
+    "check_in_btn": "Işe gelendigiňi bellemek",
+    "checked_in_today": "Şu günki gatnaşyk bellendi",
     "on_time": "Wagtynda",
     "late": "Gijä galdy",
     "no_data": "Maglumat ýok",
@@ -113,16 +128,43 @@
     },
     "positions": {
       "rector": "Rektor",
+      "prorector": "Prorektor",
       "vice_rector_academic": "Okuw işleri boýunça prorektor",
       "vice_rector_science": "Ylmy işler boýunça prorektor",
       "dean": "Dekan",
+      "deputy_dean": "Dekanyň orunbasary",
       "head_of_department": "Kafedra müdiri",
       "none": "Dolandyryş wezipesi ýok"
+    },
+    "work_statuses": {
+      "working": "Işleýär (Işjeň)",
+      "vacation": "Zähmet rugsadynda",
+      "sick": "Bülletende",
+      "trip": "Iş saparynda",
+      "business_trip": "Iş saparynda"
+    },
+    "teaching_statuses": {
+      "lab_assistant": "Laborant",
+      "senior_lab": "Uly laborant",
+      "junior_teacher": "Kiçi mugallym",
+      "assistant": "Assistent",
+      "teacher": "Mugallym",
+      "senior_teacher": "Uly mugallym",
+      "docent": "Dosent",
+      "professor": "Professor"
+    },
+    "academic_degrees": {
+      "none": "Derejesi ýok",
+      "master": "Magistr",
+      "candidate": "Ylymlaryň kandidaty",
+      "doctor": "Ylymlaryň doktory",
+      "phd": "PhD"
     }
   },
   "tasks": {
     "loading": "Tagta ýüklenýär...",
     "title": "Tabşyryk dolandyryjysy",
+    "not_found": "Bu ýagdaýdaky tabşyryklar tapylmady.",
     "tabs": {
       "my_tasks": "Meniň tabşyryklarym",
       "delegated": "Men tabşyrdym",
@@ -130,11 +172,17 @@
       "all": "Institutyň ähli tabşyryklary"
     },
     "filters": {
+      "all": "Ählisi",
+      "created": "Döredildi",
+      "in_progress": "Işlenýär",
+      "revision": "Garaşylýar",
+      "on_review": "Barlagda",
+      "completed": "Tamamlandy",
       "creator_all": "Tabşyrykçy: Ählisi",
       "assignee_all": "Ýerine ýetiriji: Ählisi",
       "dept_all": "Kafedra: Ählisi"
     },
-    "create_btn": "Tabşyryk döretmek",
+    "create_btn": "+ Tabşyryk döretmek",
     "columns": {
       "created": "Döredildi",
       "in_progress": "Işlenýär",
@@ -179,13 +227,26 @@
     "loading": "Tabşyryk ýüklenýär...",
     "not_found": "Tabşyryk tapylmady",
     "back": "Yza",
-    "overdue": "GIGIJAN",
+    "overdue": "GIJIKDIRILDI",
+    "parent_task_link": "Esasy tabşyryk:",
     "actions": {
       "processing": "Işlenýär...",
       "take_in_progress": "Işe başlamak",
       "send_to_review": "Barlaga ibermek",
       "accept": "Kabul etmek (Tamamlamak)",
-      "return_revision": "Kämilleşdirmäge yzyna gaýtarmak"
+      "return_revision": "Kämilleşdirmäge gaýtarmak"
+    },
+    "quality_modal": {
+      "title": "Işiň hiline baha bermek",
+      "subtitle": "Tabşyrygy tamamlamazdan öň 1-den 5-e çenli baha beriň",
+      "confirm": "Tassyklamak we tamamlamak"
+    },
+    "subtasks": {
+      "title": "Kiçi tabşyryklar",
+      "add_btn": "+ Kiçi tabşyryk goşmak",
+      "progress": "Ýerine ýetirildi",
+      "empty": "Häzirlikçe kiçi tabşyryk ýok. Bu işi tapgyrlara bölüp bilersiňiz.",
+      "modal_title": "Kiçi tabşyryk döretmek"
     },
     "timeline": {
       "title": "Gijikdirme tertibi",
@@ -199,7 +260,7 @@
     },
     "reports": {
       "title": "Hasabatlar we teswirler",
-      "placeholder": "Teswir ýazyň ýa-da hasabat goşuldyň...",
+      "placeholder": "Teswir ýazyň ýa-da hasabat goşuň...",
       "submitting": "Iberilýär...",
       "submit_btn": "Hasabat goýmak",
       "download_file": "Goşulan faýly ýükläp almak",
@@ -217,5 +278,23 @@
       "no_assignees": "Bellenilmedik",
       "target_depts": "Maksatly kafedralar"
     }
+  },
+  "departments": {
+    "loading": "Institut düzümi ýüklenýär...",
+    "structure": "Düzüm",
+    "not_found": "Kafedralar tapylmady",
+    "select_dept": "Kafedrany saýlaň",
+    "staff_count": "Işgär sany:",
+    "card": {
+      "status": "Ýagdaýy:",
+      "email": "E-poçta:",
+      "phone": "Telefon:",
+      "hours": "Iş sagatlary:",
+      "hired": "Işe giren ýyly:",
+      "working": "Işleýär",
+      "none": "—"
+    },
+    "view_profile": "Şahsy jildi görmek",
+    "empty_staff": "Bu kafedra berkidilen işgär ýok"
   }
 }
