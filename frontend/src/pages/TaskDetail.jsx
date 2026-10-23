@@ -25,9 +25,16 @@ export default function TaskDetail() {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
+  // Модальное окно оценки качества (1-5 звезд)
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [qualityScore, setQualityScore] = useState(5);
 
+  // Модальное окно возврата на доработку с обязательной причиной
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionReason, setRevisionReason] = useState('');
+  const [revisionFile, setRevisionFile] = useState(null);
+
+  // Модальное окно создания подзадачи
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [newSubtask, setNewSubtask] = useState({
     title: '',
@@ -95,6 +102,39 @@ export default function TaskDetail() {
       console.error(error);
     } finally {
       setIsChangingStatus(false); 
+    }
+  };
+
+  // Возврат задачи на доработку с автоматическим созданием замечания в отчетах
+  const handleReturnToRevision = async (e) => {
+    e.preventDefault();
+    if (!revisionReason.trim() || isChangingStatus) return;
+
+    setIsChangingStatus(true);
+    try {
+      const formData = new FormData();
+      formData.append('task', id);
+      formData.append('comment', `[REVISION] ${revisionReason.trim()}`);
+      if (revisionFile) {
+        formData.append('attached_file', revisionFile);
+      }
+
+      await api.post('/reports/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      await api.patch(`/tasks/${id}/`, { status: 'revision' });
+
+      setShowRevisionModal(false);
+      setRevisionReason('');
+      setRevisionFile(null);
+      await fetchTaskData();
+    } catch (error) {
+      const serverMsg = error.response?.data?.status?.[0] || t('tasks.errors.status_change');
+      alert(serverMsg);
+      console.error(error);
+    } finally {
+      setIsChangingStatus(false);
     }
   };
 
@@ -201,7 +241,6 @@ export default function TaskDetail() {
 
   const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed';
   
-  // ИСПРАВЛЕНО: Учитываем не только прямых исполнителей, но и сотрудников целевой кафедры
   const isDirectAssignee = task.assignees?.some(a => a.id === currentUser.id);
   const isInTargetDept = Boolean(
     currentUser.department &&
@@ -211,7 +250,6 @@ export default function TaskDetail() {
   const isCreator = task.creator?.id === currentUser.id;
   const canManageSubtasks = (isCreator || isAssignee) && (currentUser.is_manager || currentUser.is_rectorate);
 
-  // ИСПРАВЛЕНО: Фильтрация подчиненных по иерархии для создания подзадач
   const subordinateUsers = users.filter(u => {
     if (u.id === currentUser.id) return false;
     if (currentUser.is_rectorate) return true;
@@ -298,7 +336,7 @@ export default function TaskDetail() {
               </button>
               <button 
                 disabled={isChangingStatus}
-                onClick={() => handleStatusChange('revision')} 
+                onClick={() => setShowRevisionModal(true)} 
                 className={`py-2 px-4 rounded-lg font-bold transition ${isChangingStatus ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white`}
               >
                 {t('task_detail.actions.return_revision')}
@@ -468,37 +506,57 @@ export default function TaskDetail() {
             )}
 
             <div className="p-6 space-y-6">
-              {reports.length > 0 ? reports.map((rep, index) => (
-                <div key={index} className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
-                    {rep.author?.last_name ? rep.author.last_name.charAt(0) : 'U'}
-                  </div>
-                  <div className="flex-1 bg-gray-50 p-4 rounded-xl rounded-tl-none border border-gray-100">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-gray-800">
-                        {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : t('task_detail.reports.employee')}
-                      </span>
-                      <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString(dateLocale)}</span>
+              {reports.length > 0 ? reports.map((rep, index) => {
+                const isRevisionRemark = rep.comment?.startsWith('[REVISION]');
+                const cleanComment = isRevisionRemark
+                  ? rep.comment.replace(/^\[REVISION\]\s*/, '')
+                  : rep.comment;
+
+                return (
+                  <div key={rep.id || index} className="flex gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${
+                      isRevisionRemark ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {rep.author?.last_name ? rep.author.last_name.charAt(0) : 'U'}
                     </div>
-                    <p className="text-gray-700 text-sm whitespace-pre-wrap">{rep.comment}</p>
-                    
-                    {rep.attached_file && (
-                      <div className="mt-3">
-                        <button 
-                          type="button"
-                          onClick={(e) => handleDownload(e, rep.attached_file)}
-                          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-100 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-left"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                          </svg>
-                          <span>{t('task_detail.reports.download_file')}</span>
-                        </button>
+                    <div className={`flex-1 p-4 rounded-xl rounded-tl-none border ${
+                      isRevisionRemark ? 'bg-red-50/60 border-red-200' : 'bg-gray-50 border-gray-100'
+                    }`}>
+                      <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-800">
+                            {rep.author ? `${rep.author.last_name} ${rep.author.first_name}` : t('task_detail.reports.employee')}
+                          </span>
+                          {isRevisionRemark && (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                              {t('task_detail.revision_modal.badge')}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500">{new Date(rep.submitted_at).toLocaleString(dateLocale)}</span>
                       </div>
-                    )}
+                      <p className={`text-sm whitespace-pre-wrap ${isRevisionRemark ? 'text-red-900 font-medium' : 'text-gray-700'}`}>
+                        {cleanComment}
+                      </p>
+                      
+                      {rep.attached_file && (
+                        <div className="mt-3">
+                          <button 
+                            type="button"
+                            onClick={(e) => handleDownload(e, rep.attached_file)}
+                            className="inline-flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-100 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-left"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            <span>{t('task_detail.reports.download_file')}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )) : (
+                );
+              }) : (
                 <div className="text-center text-gray-400 py-4">{t('task_detail.reports.empty')}</div>
               )}
             </div>
@@ -618,6 +676,61 @@ export default function TaskDetail() {
                 {t('task_detail.quality_modal.confirm')} ({qualityScore}/5)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО: ВОЗВРАТ НА ДОРАБОТКУ С ОБЯЗАТЕЛЬНОЙ ПРИЧИНОЙ */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-red-100 bg-red-50 flex justify-between items-center">
+              <h3 className="font-bold text-red-800 text-lg">{t('task_detail.revision_modal.title')}</h3>
+              <button onClick={() => setShowRevisionModal(false)} className="text-red-400 hover:text-red-700 text-2xl leading-none">&times;</button>
+            </div>
+
+            <form onSubmit={handleReturnToRevision} className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">{t('task_detail.revision_modal.subtitle')}</p>
+
+              <div>
+                <textarea
+                  rows="4"
+                  required
+                  value={revisionReason}
+                  onChange={(e) => setRevisionReason(e.target.value)}
+                  placeholder={t('task_detail.revision_modal.placeholder')}
+                  className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none resize-none"
+                ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                  {t('task_detail.revision_modal.attach_file')}
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setRevisionFile(e.target.files[0])}
+                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRevisionModal(false)}
+                  className="px-4 py-2 rounded-xl text-gray-600 font-bold text-sm hover:bg-gray-100"
+                >
+                  {t('tasks.modal.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingStatus || !revisionReason.trim()}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl font-bold text-sm transition shadow-md"
+                >
+                  {isChangingStatus ? t('task_detail.actions.processing') : t('task_detail.revision_modal.confirm')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

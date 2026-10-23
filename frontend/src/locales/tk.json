@@ -254,6 +254,16 @@
       "dept_all": "Kafedranyň ähli tabşyryklary",
       "all": "Institutyň ähli tabşyryklary"
     },
+    "views": {
+      "board": "Tagta",
+      "list": "Sanaw"
+    },
+    "stats": {
+      "total": "Jemi saýlanan",
+      "in_progress": "Işlenýän",
+      "on_review": "Barlaga garaşýan",
+      "overdue": "Gijikdirilen (filtr)"
+    },
     "filters": {
       "all": "Ählisi",
       "created": "Döredildi",
@@ -263,7 +273,9 @@
       "completed": "Tamamlandy",
       "creator_all": "Tabşyrykçy: Ählisi",
       "assignee_all": "Ýerine ýetiriji: Ählisi",
-      "dept_all": "Kafedra: Ählisi"
+      "dept_all": "Kafedra: Ählisi",
+      "search_placeholder": "Ady ýa-da düşündirişi boýunça gözleg...",
+      "hide_subtasks": "Kiçi tabşyryklary gizle"
     },
     "create_btn": "+ Tabşyryk döretmek",
     "columns": {
@@ -283,7 +295,28 @@
     "card": {
       "creator": "Tabşyrykçy",
       "department": "Kafedra",
-      "revisions": "K:"
+      "revisions": "Kämilleşdirme:",
+      "subtask_badge": "Kiçi tabşyryk",
+      "subtasks_progress": "Tapgyrlar",
+      "reports_count": "Hasabat",
+      "hours_spent": "sag.",
+      "today": "Şu gün",
+      "days_left": "gün",
+      "overdue_short": "Gijikdirildi"
+    },
+    "table": {
+      "task": "Tabşyryk we düşündirişi",
+      "status": "Ýagdaýy",
+      "creator": "Tabşyrykçy",
+      "assignees": "Ýerine ýetirijiler / Kafedra",
+      "progress": "Tapgyrlar we işjeňlik",
+      "deadline": "Möhleti"
+    },
+    "drawer": {
+      "open_full": "Doly açmak",
+      "close": "Paneli ýapmak",
+      "quick_actions": "Çalt hereketler",
+      "time_spent": "Sarp edilen wagt"
     },
     "board": {
       "showing_last": "Soňky görkezilýär",
@@ -329,6 +362,14 @@
       "title": "Işiň hiline baha bermek",
       "subtitle": "Tabşyrygy tamamlamazdan öň 1-den 5-e çenli baha beriň",
       "confirm": "Tassyklamak we tamamlamak"
+    },
+    "revision_modal": {
+      "title": "Tabşyrygy kämilleşdirmäge gaýtarmak",
+      "subtitle": "Gaýtarmagyň sebäbini we nämäni düzetmelidigini görkeziň. Bellik hasabatlar lentasyna goşular.",
+      "placeholder": "Bellikleri we zerur düzedişleri ýazyň...",
+      "attach_file": "Düzedişli faýly goşmak (hökmany däl)",
+      "confirm": "Kämilleşdirmäge ibermek",
+      "badge": "Kämilleşdiriş belligi"
     },
     "subtasks": {
       "title": "Kiçi tabşyryklar",

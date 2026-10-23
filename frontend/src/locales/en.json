@@ -254,6 +254,16 @@
       "dept_all": "All Department Tasks",
       "all": "All Institute Tasks"
     },
+    "views": {
+      "board": "Board",
+      "list": "List"
+    },
+    "stats": {
+      "total": "Total in view",
+      "in_progress": "In Progress",
+      "on_review": "Awaiting Review",
+      "overdue": "Overdue (filter)"
+    },
     "filters": {
       "all": "All",
       "created": "Created",
@@ -263,7 +273,9 @@
       "completed": "Completed",
       "creator_all": "Creator: All",
       "assignee_all": "Assignee: All",
-      "dept_all": "Department: All"
+      "dept_all": "Department: All",
+      "search_placeholder": "Filter by title or description...",
+      "hide_subtasks": "Hide subtasks"
     },
     "create_btn": "+ Create Task",
     "columns": {
@@ -283,7 +295,28 @@
     "card": {
       "creator": "Creator",
       "department": "Department",
-      "revisions": "R:"
+      "revisions": "Revisions:",
+      "subtask_badge": "Subtask",
+      "subtasks_progress": "Subtasks",
+      "reports_count": "Reports",
+      "hours_spent": "h",
+      "today": "Today",
+      "days_left": "d left",
+      "overdue_short": "Overdue"
+    },
+    "table": {
+      "task": "Task & Description",
+      "status": "Status",
+      "creator": "Creator",
+      "assignees": "Assignees / Dept",
+      "progress": "Subtasks & Activity",
+      "deadline": "Deadline"
+    },
+    "drawer": {
+      "open_full": "Open full page",
+      "close": "Close panel",
+      "quick_actions": "Quick Actions",
+      "time_spent": "Time Spent"
     },
     "board": {
       "showing_last": "Showing last",
@@ -329,6 +362,14 @@
       "title": "Rate Work Quality",
       "subtitle": "Select a score from 1 to 5 before completing the task",
       "confirm": "Confirm & Complete"
+    },
+    "revision_modal": {
+      "title": "Return Task for Revision",
+      "subtitle": "Specify the reason for return and what needs to be fixed. The remark will be added to the reports feed.",
+      "placeholder": "Describe the remarks and required fixes...",
+      "attach_file": "Attach file with corrections (optional)",
+      "confirm": "Send for Revision",
+      "badge": "Revision Remark"
     },
     "subtasks": {
       "title": "Subtasks",
