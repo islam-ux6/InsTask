@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../api';
-import { useTranslation } from 'react-i18next'; // ПОДКЛЮЧЕНО
+import { useTranslation } from 'react-i18next';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer,
   Line, ComposedChart, Cell, ReferenceLine,
@@ -10,11 +9,10 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
-  const { t } = useTranslation(); // ИНИЦИАЛИЗАЦИЯ ПЕРЕВОДЧИКА
+  const { t } = useTranslation();
   
   const [currentUser, setCurrentUser] = useState(null);
   const [analytics, setAnalytics] = useState(null);
-  const [myActiveTasks, setMyActiveTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [chartTarget, setChartTarget] = useState('all_emps'); 
@@ -23,9 +21,8 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [meRes, tasksRes, analyticsRes] = await Promise.all([
+        const [meRes, analyticsRes] = await Promise.all([
           api.get('/users/me/'),
-          api.get('/tasks/'),
           api.get('/analytics/dashboard/').catch(() => ({ data: null }))
         ]);
         
@@ -42,11 +39,6 @@ export default function Dashboard() {
           setSelectedId(String(user.id));
         }
 
-        const myTasks = tasksRes.data.filter(task => 
-          task.assignees.some(a => a.id === user.id) && task.status !== 'completed'
-        );
-        setMyActiveTasks(myTasks);
-
       } catch (error) {
         console.error("Ошибка загрузки:", error);
       } finally {
@@ -60,6 +52,108 @@ export default function Dashboard() {
   if (!currentUser) return null;
 
   const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
+
+  // ЭКСПОРТ АНАЛИТИКИ В EXCEL (CSV С UTF-8 BOM)
+  const handleExportAnalyticsCSV = () => {
+    if (!analytics) return;
+
+    const escapeCSV = (val) => {
+      const str = String(val ?? '');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const isDeptExport = chartTarget === 'all_depts' || chartTarget === 'bottlenecks_depts';
+    let rows = [];
+    let filename = 'analytics_report.csv';
+
+    if (isDeptExport && analytics.departments?.length > 0) {
+      const headers = [
+        t('dashboard.csv_headers.name'),
+        t('dashboard.csv_headers.total_tasks'),
+        t('dashboard.csv_headers.completed'),
+        t('dashboard.csv_headers.completion_rate'),
+        t('dashboard.csv_headers.quality'),
+        t('dashboard.csv_headers.active_tasks'),
+        t('dashboard.csv_headers.in_progress_h'),
+        t('dashboard.csv_headers.on_review_h'),
+        t('dashboard.csv_headers.revision_h')
+      ];
+      rows.push(headers.map(escapeCSV).join(';'));
+
+      analytics.departments.forEach((dept) => {
+        const activeCount =
+          (dept.statuses?.created || 0) +
+          (dept.statuses?.in_progress || 0) +
+          (dept.statuses?.revision || 0);
+        const row = [
+          dept.name,
+          dept.total,
+          dept.completed,
+          dept.completion_rate,
+          dept.quality,
+          activeCount,
+          dept.cycle_time?.in_progress || 0,
+          dept.cycle_time?.on_review || 0,
+          dept.cycle_time?.revision || 0
+        ];
+        rows.push(row.map(escapeCSV).join(';'));
+      });
+      filename = `analytics_departments_${new Date().toISOString().slice(0, 10)}.csv`;
+    } else {
+      let empsToExport = analytics.employees || [];
+      if (chartTarget === 'all_emps_in_dept' && selectedId) {
+        empsToExport = empsToExport.filter((e) => e.department_id === parseInt(selectedId));
+      } else if (chartTarget === 'single' && selectedId) {
+        empsToExport = empsToExport.filter((e) => e.id === parseInt(selectedId));
+      }
+
+      const headers = [
+        t('dashboard.csv_headers.name'),
+        t('dashboard.csv_headers.total_tasks'),
+        t('dashboard.csv_headers.completed'),
+        t('dashboard.csv_headers.completion_rate'),
+        t('dashboard.csv_headers.quality'),
+        t('dashboard.csv_headers.discipline'),
+        t('dashboard.csv_headers.active_tasks'),
+        t('dashboard.csv_headers.in_progress_h'),
+        t('dashboard.csv_headers.on_review_h'),
+        t('dashboard.csv_headers.revision_h')
+      ];
+      rows.push(headers.map(escapeCSV).join(';'));
+
+      empsToExport.forEach((emp) => {
+        const activeCount =
+          (emp.statuses?.created || 0) +
+          (emp.statuses?.in_progress || 0) +
+          (emp.statuses?.revision || 0);
+        const row = [
+          emp.name,
+          emp.total,
+          emp.completed,
+          emp.completion_rate,
+          emp.quality,
+          emp.discipline ?? 100,
+          activeCount,
+          emp.cycle_time?.in_progress || 0,
+          emp.cycle_time?.on_review || 0,
+          emp.cycle_time?.revision || 0
+        ];
+        rows.push(row.map(escapeCSV).join(';'));
+      });
+      filename = `analytics_employees_${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
 
   const renderProductivityChart = () => {
     if (chartTarget === 'all_depts') {
@@ -286,6 +380,17 @@ export default function Dashboard() {
             {analytics?.scope === 'institute' ? t('dashboard.panel_institute') : (analytics?.scope === 'department' ? t('dashboard.panel_department') : t('dashboard.panel_teacher'))}
           </p>
         </div>
+
+        {/* КНОПКА ЭКСПОРТА В EXCEL (CSV) */}
+        <button
+          onClick={handleExportAnalyticsCSV}
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition shadow-sm shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>{t('dashboard.export_csv')}</span>
+        </button>
       </div>
 
       <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : ''} gap-6`}>

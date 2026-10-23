@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import EmployeeRecord, DailyAttendance
+from .models import EmployeeRecord, DailyAttendance, ScheduleItem
 
 User = get_user_model()
 
@@ -17,6 +17,13 @@ class EmployeeRecordSerializer(serializers.ModelSerializer):
         if obj.author:
             return f"{obj.author.first_name} {obj.author.last_name}".strip() or obj.author.username
         return "Система"
+
+
+class ScheduleItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScheduleItem
+        fields = ['id', 'user', 'week_type', 'day_of_week', 'time_slot', 'subject_name', 'class_type', 'room', 'group']
+        read_only_fields = ['user']
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -45,7 +52,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'attendance_history',
             'schedule'
         ]
-        # ИСПРАВЛЕНО: Запрещаем пользователям менять себе должность, степень или кафедру через API
         read_only_fields = [
             'username', 'position', 'teaching_status', 'academic_degree',
             'department', 'employment_date', 'working_hours',
@@ -53,7 +59,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_attendance_history(self, obj):
-        # ИСПРАВЛЕНО: Используем prefetched-кэш obj.attendance_records.all() вместо нового запроса к БД
         records = obj.attendance_records.all()
         return {str(record.date): record.status for record in records}
 
@@ -72,6 +77,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 continue
 
             entry = {
+                'id': item.id,
+                'week_type': item.week_type,
                 'time': item.time_slot,
                 'name': item.subject_name,
                 'type': item.class_type,

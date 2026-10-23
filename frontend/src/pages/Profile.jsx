@@ -23,10 +23,30 @@ export default function Profile() {
   const [recordData, setRecordData] = useState({ record_type: 'reward', description: '' });
   const [submittingRecord, setSubmittingRecord] = useState(false);
 
+  // Состояния для конструктора расписания
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [submittingSchedule, setSubmittingSchedule] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    week_type: 'both',
+    day_of_week: 'Понедельник',
+    time_slot: '08:30 - 10:00',
+    subject_name: '',
+    class_type: 'Лекция',
+    room: '',
+    group: ''
+  });
+
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
 
   const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
+
+  const refreshProfileUser = async (targetId) => {
+    const endpoint = (!id || Number(id) === currentUser?.id) ? '/users/me/' : `/users/${targetId}/`;
+    const res = await api.get(endpoint);
+    setUser(res.data);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -103,14 +123,48 @@ export default function Profile() {
       
       setShowRecordModal(false);
       setRecordData({ record_type: 'reward', description: '' });
-      
-      const updatedUserRes = await api.get(`/users/${user.id}/`);
-      setUser(updatedUserRes.data);
+      await refreshProfileUser(user.id);
     } catch (error) {
       alert('Ошибка при сохранении записи. Проверьте права доступа.');
       console.error(error);
     } finally {
       setSubmittingRecord(false);
+    }
+  };
+
+  // Добавление новой пары с проверкой накладок
+  const handleAddScheduleItem = async (e) => {
+    e.preventDefault();
+    setScheduleError('');
+    setSubmittingSchedule(true);
+    try {
+      await api.post(`/users/${user.id}/schedule/`, scheduleForm);
+      setShowScheduleModal(false);
+      setScheduleForm({
+        ...scheduleForm,
+        subject_name: '',
+        room: '',
+        group: ''
+      });
+      await refreshProfileUser(user.id);
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Ошибка при сохранении расписания.';
+      setScheduleError(msg);
+    } finally {
+      setSubmittingSchedule(false);
+    }
+  };
+
+  // Удаление пары из расписания
+  const handleDeleteScheduleItem = async (itemId) => {
+    if (!itemId) return;
+    if (!window.confirm(t('profile.schedule.delete_confirm'))) return;
+    try {
+      await api.delete(`/users/${user.id}/schedule/?item_id=${itemId}`);
+      await refreshProfileUser(user.id);
+    } catch (err) {
+      alert('Не удалось удалить занятие.');
+      console.error(err);
     }
   };
 
@@ -122,11 +176,10 @@ export default function Profile() {
   const reprimands = user.records?.filter(r => r.record_type === 'reprimand') || [];
   const isMyProfile = !id || Number(id) === currentUser.id;
 
-  // ИСПРАВЛЕНО: Строгая проверка субординации для выдачи выговоров/наград и смены статуса
   const isSubordinate = (() => {
     if (isMyProfile) return false;
     if (currentUser.is_rectorate) return true;
-    if (user.is_rectorate) return false; // Ректорату никто нижестоящий выдавать записи не может
+    if (user.is_rectorate) return false;
     if (['dean', 'deputy_dean'].includes(currentUser.position)) {
       return user.position !== 'dean';
     }
@@ -141,6 +194,13 @@ export default function Profile() {
 
   const canIssueRecords = isSubordinate;
   const canEditWorkStatus = isMyProfile || isSubordinate;
+
+  // Права на редактирование расписания: Ректорат, Деканат или Заведующий для сотрудников своей кафедры (включая себя)
+  const canManageSchedule = (
+    currentUser.is_rectorate ||
+    ['dean', 'deputy_dean'].includes(currentUser.position) ||
+    (currentUser.position === 'head_of_department' && currentUser.department === user.department)
+  );
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
@@ -159,7 +219,6 @@ export default function Profile() {
   const getDayStatus = (day) => {
     const dateStr = formatDate(year, month, day);
     const dayOfWeek = new Date(year, month, day).getDay();
-    // ИСПРАВЛЕНО: В вузе шестидневка, выходной только воскресенье (0). Суббота (6) учитывается!
     if (dayOfWeek === 0) return 'weekend';
     if (dateStr > todayStr) return 'future';
 
@@ -191,6 +250,7 @@ export default function Profile() {
   const displayedTasks = tasks.filter(task => taskFilter === 'all' ? true : task.status === taskFilter);
   const scheduleData = user.schedule || { odd: {}, even: {} };
   const daysOfWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const timeSlots = ['08:30 - 10:00', '10:15 - 11:45', '12:00 - 13:30', '14:00 - 15:30', '15:45 - 17:15'];
   const weekdayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   const currentSchedule = scheduleData[weekParity] || {};
 
@@ -380,12 +440,22 @@ export default function Profile() {
             <div className="p-6 flex-1 flex flex-col">
               {activeTab === 'schedule' && (
                 <div className="flex flex-col h-full animate-fade-in">
-                  <div className="flex justify-center mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                     <div className="bg-gray-100 p-1 rounded-xl flex gap-1 shadow-inner">
-                      <button onClick={() => setWeekParity('odd')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'odd' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>{t('profile.schedule.odd_week')}</button>
-                      <button onClick={() => setWeekParity('even')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'even' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>{t('profile.schedule.even_week')}</button>
+                      <button onClick={() => setWeekParity('odd')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'odd' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>{t('profile.schedule.odd_week')}</button>
+                      <button onClick={() => setWeekParity('even')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${weekParity === 'even' ? 'bg-white text-indigo-600 shadow' : 'text-gray-500 hover:text-gray-700'}`}>{t('profile.schedule.even_week')}</button>
                     </div>
+
+                    {canManageSchedule && (
+                      <button
+                        onClick={() => { setScheduleError(''); setShowScheduleModal(true); }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm shrink-0"
+                      >
+                        {t('profile.schedule.add_btn')}
+                      </button>
+                    )}
                   </div>
+
                   <div className="space-y-6 overflow-y-auto max-h-[600px] pr-2">
                     {daysOfWeek.map(day => {
                       const dayClasses = currentSchedule[day];
@@ -399,8 +469,12 @@ export default function Profile() {
                           </div>
                           <div className="divide-y divide-gray-100">
                             {dayClasses.map((cls, idx) => (
-                              <div key={idx} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50 transition-colors">
-                                <div className="min-w-[120px]"><span className="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-lg text-sm border border-indigo-100">{cls.time}</span></div>
+                              <div key={cls.id || idx} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50 transition-colors">
+                                <div className="min-w-[120px]">
+                                  <span className="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-lg text-sm border border-indigo-100">
+                                    {cls.time}
+                                  </span>
+                                </div>
                                 <div className="flex-1">
                                   <p className="font-bold text-gray-800">{cls.name}</p>
                                   <div className="flex flex-wrap gap-3 mt-1 text-xs font-medium text-gray-500">
@@ -409,6 +483,18 @@ export default function Profile() {
                                     <span className="flex items-center gap-1"><span className="text-gray-400">{t('profile.schedule.room')}</span> {cls.room}</span>
                                   </div>
                                 </div>
+                                {canManageSchedule && cls.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteScheduleItem(cls.id)}
+                                    className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors self-end sm:self-center"
+                                    title="Удалить занятие"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -472,6 +558,140 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ ПАРЫ В РАСПИСАНИЕ С ЗАЩИТОЙ ОТ НАКЛАДОК */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-fade-in">
+            <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 text-lg">{t('profile.schedule.modal_title')}</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="text-gray-400 hover:text-gray-800 text-2xl leading-none">&times;</button>
+            </div>
+
+            <form onSubmit={handleAddScheduleItem} className="p-6 space-y-4">
+              {scheduleError && (
+                <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold leading-relaxed">
+                  {scheduleError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.week_type_label')}</label>
+                  <select
+                    value={scheduleForm.week_type}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, week_type: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                  >
+                    <option value="both">{t('profile.schedule.both_weeks')}</option>
+                    <option value="odd">{t('profile.schedule.odd_week')}</option>
+                    <option value="even">{t('profile.schedule.even_week')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.day_label')}</label>
+                  <select
+                    value={scheduleForm.day_of_week}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, day_of_week: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                  >
+                    {daysOfWeek.map((d) => (
+                      <option key={d} value={d}>
+                        {t(`profile.schedule.days.${d}`, { defaultValue: d })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.time_label')}</label>
+                  <select
+                    value={scheduleForm.time_slot}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, time_slot: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                  >
+                    {timeSlots.map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.class_type_label')}</label>
+                  <select
+                    value={scheduleForm.class_type}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, class_type: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                  >
+                    <option value={t('profile.schedule.types.lecture')}>{t('profile.schedule.types.lecture')}</option>
+                    <option value={t('profile.schedule.types.practice')}>{t('profile.schedule.types.practice')}</option>
+                    <option value={t('profile.schedule.types.lab')}>{t('profile.schedule.types.lab')}</option>
+                    <option value={t('profile.schedule.types.seminar')}>{t('profile.schedule.types.seminar')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.subject_label')}</label>
+                <input
+                  type="text"
+                  required
+                  placeholder={t('profile.schedule.subject_placeholder')}
+                  value={scheduleForm.subject_name}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, subject_name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.room_label')}</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={t('profile.schedule.room_placeholder')}
+                    value={scheduleForm.room}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, room: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.schedule.group_label')}</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={t('profile.schedule.group_placeholder')}
+                    value={scheduleForm.group}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, group: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(false)}
+                  className="px-4 py-2 rounded-xl text-gray-600 font-bold text-sm hover:bg-gray-100"
+                >
+                  {t('tasks.modal.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingSchedule}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-xl font-bold text-sm transition shadow-md"
+                >
+                  {submittingSchedule ? t('profile.modal.save') : t('profile.schedule.save_btn')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showRecordModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">

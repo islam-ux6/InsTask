@@ -6,6 +6,19 @@
     "profile": "Meniň profilim",
     "logout": "Çykmak"
   },
+  "search": {
+    "placeholder": "Ulgam boýunça çalt gözleg...",
+    "modal_placeholder": "Tabşyrygyň adyny, işgäriň F.A.A. ýa-da kafedrany ýazyň...",
+    "shortcut": "Ctrl + K",
+    "esc": "ESC",
+    "no_results": "Siziň talabyňyz boýunça hiç zat tapylmady",
+    "start_typing": "Tabşyryklary, işgärleri ýa-da kafedralary gözlemek üçin ýazyp başlaň",
+    "categories": {
+      "tasks": "Tabşyryklar",
+      "employees": "Işgärler",
+      "departments": "Kafedralar"
+    }
+  },
   "notifications": {
     "title": "Duýduryşlar",
     "mark_all_read": "Ählisini okaldy diýip belle",
@@ -31,6 +44,19 @@
     "staff_online": "Ulgamdaky işgärler",
     "productivity_center": "Öndürijilik merkezi",
     "personal_productivity": "Şahsy öndürijilik",
+    "export_csv": "Hasabaty ýüklemek (Excel)",
+    "csv_headers": {
+      "name": "Işgär / Kafedra",
+      "total_tasks": "Jemi tabşyryklar",
+      "completed": "Tamamlandy",
+      "completion_rate": "Ýerine ýetiriş (%)",
+      "quality": "Ortaça hil (1-5)",
+      "discipline": "Düzgün-nyzam (%)",
+      "active_tasks": "Işjeň tabşyryklar",
+      "in_progress_h": "Işlenýär (sag.)",
+      "on_review_h": "Barlagda (sag.)",
+      "revision_h": "Kämilleşdirmede (sag.)"
+    },
     "filters": {
       "departments": "Kafedralar",
       "delays_dept": "Gijikdirmeler (Kaf.)",
@@ -133,10 +159,31 @@
     "schedule": {
       "odd_week": "Täk hepde (1)",
       "even_week": "Jübüt hepde (2)",
+      "both_weeks": "Her hepde",
       "empty": "Bu hepde sapak bellenilmedi.",
       "type": "Görnüşi:",
       "group": "Topar:",
       "room": "Otag:",
+      "add_btn": "+ Sapak goşmak",
+      "delete_confirm": "Bu sapagy tertipden pozmak isleýärsiňizmi?",
+      "modal_title": "Sapak tertibine täze sapak goşmak",
+      "week_type_label": "Hepdäniň görnüşi",
+      "day_label": "Hepdäniň güni",
+      "time_label": "Sapak wagty",
+      "subject_label": "Ders ady *",
+      "subject_placeholder": "Meselem: Algoritmler we maglumat düzümleri",
+      "class_type_label": "Sapagyň görnüşi",
+      "room_label": "Otag (Auditoriya) *",
+      "room_placeholder": "Meselem: A-101 ýa-da Lab-2",
+      "group_label": "Topar *",
+      "group_placeholder": "Meselem: IT-21",
+      "save_btn": "Sapagy ýatda saklamak",
+      "types": {
+        "lecture": "Leksiýa",
+        "practice": "Amaly",
+        "lab": "Tejribe",
+        "seminar": "Seminar"
+      },
       "days": {
         "Понедельник": "Duşenbe",
         "Вторник": "Sişenbe",
@@ -251,7 +298,11 @@
       "desc_label": "Düşündirişi *",
       "deadline_label": "Möhleti *",
       "assignees_label": "Ýerine ýetirijiler (tabynlyk boýunça)",
+      "smart_pick_btn": "Iň amatlysyny saýlamak",
+      "smart_pick_result": "Maslahat berilýär:",
+      "smart_pick_none": "Häzirki wagtda «Işleýär» ýagdaýyndaky elýeterli işgär ýok.",
       "active_load": "Işjeň:",
+      "classes_load": "Sapak:",
       "no_subordinates": "Bellemek üçin elýeterli işgär ýok",
       "target_dept_label": "Maksatly kafedralar",
       "cancel": "Goýbolsun",
@@ -324,6 +375,18 @@
     "not_found": "Kafedralar tapylmady",
     "select_dept": "Kafedrany saýlaň",
     "staff_count": "Işgär sany:",
+    "export_csv": "Sanawy ýüklemek (Excel)",
+    "csv_headers": {
+      "full_name": "F.A.A.",
+      "department": "Kafedra",
+      "position": "Wezipe / Dereje",
+      "degree": "Ylmy dereje",
+      "work_status": "Iş ýagdaýy",
+      "email": "E-poçta",
+      "phone": "Telefon",
+      "hours": "Iş sagatlary",
+      "hired": "Işe giren senesi"
+    },
     "card": {
       "status": "Ýagdaýy:",
       "email": "E-poçta:",

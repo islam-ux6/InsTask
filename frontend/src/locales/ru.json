@@ -6,6 +6,19 @@
     "profile": "Мой профиль",
     "logout": "Выйти"
   },
+  "search": {
+    "placeholder": "Быстрый поиск по системе...",
+    "modal_placeholder": "Введите название задачи, ФИО сотрудника или кафедру...",
+    "shortcut": "Ctrl + K",
+    "esc": "ESC",
+    "no_results": "Ничего не найдено по вашему запросу",
+    "start_typing": "Начните вводить текст для поиска задач, сотрудников или кафедр",
+    "categories": {
+      "tasks": "Задачи",
+      "employees": "Сотрудники",
+      "departments": "Кафедры"
+    }
+  },
   "notifications": {
     "title": "Уведомления",
     "mark_all_read": "Прочитать все",
@@ -31,6 +44,19 @@
     "staff_online": "Штат онлайн",
     "productivity_center": "Центр продуктивности",
     "personal_productivity": "Личная продуктивность",
+    "export_csv": "Скачать отчет (Excel)",
+    "csv_headers": {
+      "name": "Сотрудник / Кафедра",
+      "total_tasks": "Всего задач",
+      "completed": "Завершено",
+      "completion_rate": "Выполнение (%)",
+      "quality": "Среднее качество (1-5)",
+      "discipline": "Дисциплина (%)",
+      "active_tasks": "Активных задач",
+      "in_progress_h": "В работе (ч.)",
+      "on_review_h": "На проверке (ч.)",
+      "revision_h": "На доработке (ч.)"
+    },
     "filters": {
       "departments": "Кафедры",
       "delays_dept": "Задержки (Каф.)",
@@ -133,10 +159,31 @@
     "schedule": {
       "odd_week": "Нечетная неделя (1)",
       "even_week": "Четная неделя (2)",
+      "both_weeks": "Каждую неделю",
       "empty": "На эту неделю пар не назначено.",
       "type": "Тип:",
       "group": "Группа:",
       "room": "Ауд:",
+      "add_btn": "+ Добавить пару",
+      "delete_confirm": "Удалить это занятие из расписания?",
+      "modal_title": "Добавить занятие в расписание",
+      "week_type_label": "Периодичность недели",
+      "day_label": "День недели",
+      "time_label": "Время занятия",
+      "subject_label": "Дисциплина *",
+      "subject_placeholder": "Например: Алгоритмы и структуры данных",
+      "class_type_label": "Тип занятия",
+      "room_label": "Аудитория *",
+      "room_placeholder": "Например: A-101 или Lab-2",
+      "group_label": "Группа *",
+      "group_placeholder": "Например: IT-21",
+      "save_btn": "Сохранить занятие",
+      "types": {
+        "lecture": "Лекция",
+        "practice": "Практика",
+        "lab": "Лабораторная",
+        "seminar": "Семинар"
+      },
       "days": {
         "Понедельник": "Понедельник",
         "Вторник": "Вторник",
@@ -251,7 +298,11 @@
       "desc_label": "Описание *",
       "deadline_label": "Дедлайн *",
       "assignees_label": "Исполнители (доступные по субординации)",
+      "smart_pick_btn": "Подобрать оптимального",
+      "smart_pick_result": "Рекомендован:",
+      "smart_pick_none": "Нет доступных сотрудников со статусом «Работает».",
       "active_load": "Актив:",
+      "classes_load": "Пар:",
       "no_subordinates": "Нет доступных подчиненных для назначения",
       "target_dept_label": "Целевые кафедры",
       "cancel": "Отмена",
@@ -324,6 +375,18 @@
     "not_found": "Кафедры не найдены",
     "select_dept": "Выберите кафедру",
     "staff_count": "Сотрудников в штате:",
+    "export_csv": "Выгрузить список (Excel)",
+    "csv_headers": {
+      "full_name": "ФИО",
+      "department": "Кафедра",
+      "position": "Должность / Статус",
+      "degree": "Ученая степень",
+      "work_status": "Статус в штате",
+      "email": "Почта",
+      "phone": "Телефон",
+      "hours": "Часы работы",
+      "hired": "Дата трудоустройства"
+    },
     "card": {
       "status": "Статус:",
       "email": "Почта:",

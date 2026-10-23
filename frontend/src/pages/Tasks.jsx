@@ -17,6 +17,7 @@ export default function Tasks() {
   const [activeTab, setActiveTab] = useState('my_tasks'); 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [recommendedInfo, setRecommendedInfo] = useState(null);
 
   const [filterCreator, setFilterCreator] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
@@ -73,7 +74,6 @@ export default function Tasks() {
     const task = tasks.find(item => item.id === parseInt(taskId));
     if (!task || task.status === newStatus) return;
 
-    // Если пытаются завершить задачу перетаскиванием, а у неё есть открытые подзадачи — блокируем
     if (newStatus === 'completed' && task.subtasks?.some(s => s.status !== 'completed')) {
       alert(t('task_detail.subtasks.incomplete_warning'));
       return;
@@ -100,7 +100,6 @@ export default function Tasks() {
     let filtered = [...tasks];
 
     if (activeTab === 'my_tasks') {
-      // ИСПРАВЛЕНО: Включаем как личные задачи, так и общие задачи на кафедру сотрудника
       filtered = filtered.filter(item => 
         item.assignees?.some(a => a.id === currentUser.id) ||
         (currentUser.department && item.target_departments?.some(d => d.id === currentUser.department))
@@ -121,6 +120,101 @@ export default function Tasks() {
     return filtered;
   };
 
+  // Подсчет метрик загруженности сотрудника (активные задачи, пары в расписании, средний балл качества)
+  const getEmployeeMetrics = (userObj) => {
+    const stats = analytics?.employees?.find(emp => emp.id === userObj.id);
+    const activeTasksCount = stats
+      ? (stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision + stats.statuses.on_review)
+      : tasks.filter(task => task.status !== 'completed' && task.assignees?.some(a => a.id === userObj.id)).length;
+
+    let scheduleCount = 0;
+    if (userObj.schedule) {
+      const oddClasses = Object.values(userObj.schedule.odd || {}).reduce((acc, arr) => acc + arr.length, 0);
+      const evenClasses = Object.values(userObj.schedule.even || {}).reduce((acc, arr) => acc + arr.length, 0);
+      scheduleCount = Math.round((oddClasses + evenClasses) / 2);
+    }
+
+    const quality = stats?.quality || 0;
+    return { activeTasksCount, scheduleCount, quality };
+  };
+
+  // Фильтрация подчиненных по субординации и сортировка по возрастанию нагрузки
+  const getSubordinateUsers = () => {
+    if (!currentUser) return [];
+    const list = users.filter(u => {
+      if (u.id === currentUser.id) return false;
+      if (currentUser.is_rectorate) return true;
+      if (u.is_rectorate) return false;
+      if (['dean', 'deputy_dean'].includes(currentUser.position)) {
+        return u.position !== 'dean';
+      }
+      if (currentUser.position === 'head_of_department') {
+        return (
+          u.department === currentUser.department &&
+          !['dean', 'deputy_dean', 'head_of_department'].includes(u.position)
+        );
+      }
+      return false;
+    });
+
+    return list.sort((a, b) => {
+      const aWorking = a.work_status === 'working' ? 0 : 1;
+      const bWorking = b.work_status === 'working' ? 0 : 1;
+      if (aWorking !== bWorking) return aWorking - bWorking;
+
+      const mA = getEmployeeMetrics(a);
+      const mB = getEmployeeMetrics(b);
+      if (mA.activeTasksCount !== mB.activeTasksCount) {
+        return mA.activeTasksCount - mB.activeTasksCount;
+      }
+      if (mA.scheduleCount !== mB.scheduleCount) {
+        return mA.scheduleCount - mB.scheduleCount;
+      }
+      return mB.quality - mA.quality;
+    });
+  };
+
+  // УМНЫЙ АВТОПОДБОР ОПТИМАЛЬНОГО ИСПОЛНИТЕЛЯ
+  const handleSmartPickAssignee = () => {
+    setCreateError('');
+    const subordinates = getSubordinateUsers();
+
+    // Берем только тех, кто сейчас на работе ('working')
+    let candidates = subordinates.filter(u => u.work_status === 'working');
+
+    // Если выбраны целевые кафедры, ищем кандидатов внутри этих кафедр
+    if (newTask.target_department_ids.length > 0) {
+      const deptIds = newTask.target_department_ids.map(Number);
+      const deptCandidates = candidates.filter(u => deptIds.includes(u.department));
+      if (deptCandidates.length > 0) {
+        candidates = deptCandidates;
+      }
+    }
+
+    if (candidates.length === 0) {
+      setRecommendedInfo(null);
+      setCreateError(t('tasks.modal.smart_pick_none'));
+      return;
+    }
+
+    // Так как getSubordinateUsers() уже отсортирован по минимальной нагрузке и качеству, берем первого
+    const bestUser = candidates[0];
+    const metrics = getEmployeeMetrics(bestUser);
+
+    setNewTask(prev => ({
+      ...prev,
+      assignee_ids: [String(bestUser.id)]
+    }));
+
+    setRecommendedInfo({
+      id: bestUser.id,
+      name: `${bestUser.last_name} ${bestUser.first_name}`,
+      activeTasks: metrics.activeTasksCount,
+      scheduleCount: metrics.scheduleCount,
+      quality: metrics.quality
+    });
+  };
+
   const handleCreateTask = async (e) => {
     e.preventDefault();
     setCreateError('');
@@ -131,6 +225,7 @@ export default function Tasks() {
     try {
       await api.post('/tasks/', { ...newTask, creator_id: currentUser.id });
       setShowCreateModal(false);
+      setRecommendedInfo(null);
       setNewTask({ title: '', description: '', deadline: '', assignee_ids: [], target_department_ids: [] });
       fetchData(); 
     } catch (error) {
@@ -144,23 +239,7 @@ export default function Tasks() {
   const filteredTasks = getFilteredTasks();
   const isAdmin = currentUser.is_rectorate || currentUser.is_manager;
   const canAssignDepartments = currentUser.is_rectorate || ['dean', 'deputy_dean'].includes(currentUser.position);
-
-  // ИСПРАВЛЕНО: Строгая фильтрация подчиненных по иерархии
-  const subordinateUsers = users.filter(u => {
-    if (u.id === currentUser.id) return false;
-    if (currentUser.is_rectorate) return true;
-    if (u.is_rectorate) return false;
-    if (['dean', 'deputy_dean'].includes(currentUser.position)) {
-      return u.position !== 'dean';
-    }
-    if (currentUser.position === 'head_of_department') {
-      return (
-        u.department === currentUser.department &&
-        !['dean', 'deputy_dean', 'head_of_department'].includes(u.position)
-      );
-    }
-    return false;
-  });
+  const subordinateUsers = getSubordinateUsers();
 
   const columns = [
     { id: 'created', title: t('tasks.columns.created'), bg: 'bg-gray-100', text: 'text-gray-700' },
@@ -219,7 +298,10 @@ export default function Tasks() {
           )}
 
           {isAdmin && (
-            <button onClick={() => setShowCreateModal(true)} className="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition whitespace-nowrap">
+            <button
+              onClick={() => { setCreateError(''); setRecommendedInfo(null); setShowCreateModal(true); }}
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition whitespace-nowrap"
+            >
               {t('tasks.create_btn')}
             </button>
           )}
@@ -330,39 +412,86 @@ export default function Tasks() {
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.desc_label')}</label>
-                  <textarea rows="4" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})}></textarea>
+                  <textarea rows="3" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})}></textarea>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.deadline_label')}</label>
                     <input type="datetime-local" required className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} />
+
+                    {canAssignDepartments && (
+                      <div className="mt-4">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('tasks.modal.target_dept_label')}</label>
+                        <select multiple className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" value={newTask.target_department_ids} onChange={e => setNewTask({...newTask, target_department_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
+                          {departments.map(d => <option key={d.id} value={d.id} className="py-1 text-sm">{d.name}</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
+
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between">
-                      <span>{t('tasks.modal.assignees_label')}</span>
-                    </label>
-                    <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-28" value={newTask.assignee_ids} onChange={e => setNewTask({...newTask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
+                    <div className="flex justify-between items-center mb-1.5 gap-2">
+                      <label className="block text-sm font-bold text-gray-700">
+                        {t('tasks.modal.assignees_label')}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleSmartPickAssignee}
+                        className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>{t('tasks.modal.smart_pick_btn')}</span>
+                      </button>
+                    </div>
+
+                    {recommendedInfo && (
+                      <div className="mb-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold">{t('tasks.modal.smart_pick_result')} {recommendedInfo.name}</span>
+                          <div className="text-[11px] text-emerald-600 mt-0.5">
+                            {t('tasks.modal.active_load')} {recommendedInfo.activeTasks} | {t('tasks.modal.classes_load')} {recommendedInfo.scheduleCount}
+                            {recommendedInfo.quality > 0 ? ` | ★ ${recommendedInfo.quality}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRecommendedInfo(null)}
+                          className="text-emerald-500 hover:text-emerald-800 font-bold px-1"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    )}
+
+                    <select
+                      multiple
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-36"
+                      value={newTask.assignee_ids}
+                      onChange={e => setNewTask({...newTask, assignee_ids: Array.from(e.target.selectedOptions, o => o.value)})}
+                    >
                       {subordinateUsers.map(u => {
-                        const stats = analytics?.employees?.find(emp => emp.id === u.id);
-                        const activeLoad = stats ? (stats.statuses.created + stats.statuses.in_progress + stats.statuses.revision) : 0;
-                        const statLabel = stats ? ` | ${t('tasks.modal.active_load')} ${activeLoad}` : '';
+                        const { activeTasksCount, scheduleCount } = getEmployeeMetrics(u);
+                        const isWorking = u.work_status === 'working';
+                        const statusText = !isWorking
+                          ? ` [${t(`profile.work_statuses.${u.work_status}`, { defaultValue: u.work_status_display })}]`
+                          : '';
+
                         return (
-                          <option key={u.id} value={u.id} className="py-1 border-b border-gray-50 text-sm">
-                            {u.last_name} {u.first_name} ({t(`profile.positions.${u.position}`, { defaultValue: u.position_display })}){statLabel}
+                          <option
+                            key={u.id}
+                            value={u.id}
+                            className={`py-1.5 border-b border-gray-50 text-xs ${!isWorking ? 'text-gray-400' : 'text-gray-800'}`}
+                          >
+                            {u.last_name} {u.first_name}{statusText} — {t('tasks.modal.active_load')} {activeTasksCount} | {t('tasks.modal.classes_load')} {scheduleCount}
                           </option>
                         );
                       })}
                     </select>
                   </div>
                 </div>
-                {canAssignDepartments && (
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex justify-between"><span>{t('tasks.modal.target_dept_label')}</span></label>
-                    <select multiple className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" value={newTask.target_department_ids} onChange={e => setNewTask({...newTask, target_department_ids: Array.from(e.target.selectedOptions, o => o.value)})}>
-                      {departments.map(d => <option key={d.id} value={d.id} className="py-1 text-sm">{d.name}</option>)}
-                    </select>
-                  </div>
-                )}
               </form>
             </div>
             

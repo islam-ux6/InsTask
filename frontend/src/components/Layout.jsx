@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import api from '../api'; // Если Layout.jsx лежит в корне src/, измените на './api'
+import api from '../api'; // Если Layout.jsx лежит прямо в src/, измените на './api'
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
@@ -13,9 +13,17 @@ export default function Layout({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [readIds, setReadIds] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifFilter, setNotifFilter] = useState('all'); // 'all' | 'unread'
+  const [notifFilter, setNotifFilter] = useState('all');
   const [currentUserId, setCurrentUserId] = useState(null);
   const dropdownRef = useRef(null);
+
+  // Состояния для глобального поиска (Ctrl + K)
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchData, setSearchData] = useState({ tasks: [], users: [], departments: [] });
+  const searchInputRef = useRef(null);
+
+  const dateLocale = i18n.language === 'en' ? 'en-US' : i18n.language === 'tk' ? 'tk-TM' : 'ru-RU';
 
   const handleLogout = () => {
     localStorage.removeItem('access');
@@ -33,7 +41,7 @@ export default function Layout({ children }) {
     localStorage.setItem('language', lng);
   };
 
-  // Закрытие выпадающего списка уведомлений при клике вне его области
+  // Закрытие уведомлений при клике вне области
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -44,18 +52,47 @@ export default function Layout({ children }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Загрузка и формирование уведомлений
+  // Горячие клавиши Ctrl + K / Cmd + K и Escape для глобального поиска
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.code === 'KeyK')) {
+        e.preventDefault();
+        setShowSearchModal((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setShowSearchModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Автофокус на поле ввода при открытии окна поиска
+  useEffect(() => {
+    if (showSearchModal) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    } else {
+      setSearchQuery('');
+    }
+  }, [showSearchModal]);
+
+  // Загрузка данных для уведомлений и глобального поиска
+  useEffect(() => {
+    const fetchHeaderData = async () => {
       try {
-        const [meRes, tasksRes] = await Promise.all([
+        const [meRes, tasksRes, usersRes, deptsRes] = await Promise.all([
           api.get('/users/me/'),
-          api.get('/tasks/')
+          api.get('/tasks/').catch(() => ({ data: [] })),
+          api.get('/users/').catch(() => ({ data: [] })),
+          api.get('/departments/').catch(() => ({ data: [] }))
         ]);
 
         const user = meRes.data;
         const tasks = tasksRes.data || [];
+        const users = usersRes.data || [];
+        const departments = deptsRes.data || [];
+
         setCurrentUserId(user.id);
+        setSearchData({ tasks, users, departments });
 
         const storageKey = `erp_read_notifications_${user.id}`;
         const savedRead = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -63,12 +100,12 @@ export default function Layout({ children }) {
 
         const list = [];
 
-        // 1. Уведомления по задачам
         tasks.forEach((task) => {
-          const isAssignee = task.assignees?.some((a) => a.id === user.id);
+          const isAssignee =
+            task.assignees?.some((a) => a.id === user.id) ||
+            (user.department && task.target_departments?.some((d) => d.id === user.department));
           const isCreator = task.creator?.id === user.id;
 
-          // Новая назначенная задача
           if (isAssignee && task.status === 'created') {
             list.push({
               id: `task_new_${task.id}`,
@@ -80,7 +117,6 @@ export default function Layout({ children }) {
             });
           }
 
-          // Задача возвращена на доработку
           if (isAssignee && task.status === 'revision') {
             list.push({
               id: `task_rev_${task.id}_${task.revision_count}`,
@@ -92,7 +128,6 @@ export default function Layout({ children }) {
             });
           }
 
-          // Задача ожидает проверки (для постановщика)
           if (isCreator && task.status === 'on_review') {
             list.push({
               id: `task_review_${task.id}_${task.revision_count}`,
@@ -104,7 +139,6 @@ export default function Layout({ children }) {
             });
           }
 
-          // Задача принята и завершена
           if (isAssignee && task.status === 'completed') {
             const scoreStr = task.quality_score ? ` (${task.quality_score}/5 ★)` : '';
             list.push({
@@ -118,7 +152,6 @@ export default function Layout({ children }) {
           }
         });
 
-        // 2. Уведомления по личным достижениям и выговорам
         if (user.records && Array.isArray(user.records)) {
           user.records.forEach((rec) => {
             list.push({
@@ -135,16 +168,15 @@ export default function Layout({ children }) {
           });
         }
 
-        // Сортируем от самых свежих к более старым
         list.sort((a, b) => new Date(b.date) - new Date(a.date));
         setNotifications(list);
       } catch (err) {
-        console.error('Ошибка получения уведомлений:', err);
+        console.error('Ошибка обновления шапки:', err);
       }
     };
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    fetchHeaderData();
+    const interval = setInterval(fetchHeaderData, 30000);
     return () => clearInterval(interval);
   }, [location.pathname]);
 
@@ -176,6 +208,49 @@ export default function Layout({ children }) {
     setShowNotifications(false);
     navigate(notif.link);
   };
+
+  const handleSearchResultClick = (link) => {
+    setShowSearchModal(false);
+    setSearchQuery('');
+    navigate(link);
+  };
+
+  // Фильтрация результатов глобального поиска
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const matchedTasks = normalizedQuery
+    ? searchData.tasks
+        .filter(
+          (task) =>
+            task.title?.toLowerCase().includes(normalizedQuery) ||
+            task.description?.toLowerCase().includes(normalizedQuery)
+        )
+        .slice(0, 5)
+    : [];
+
+  const matchedUsers = normalizedQuery
+    ? searchData.users
+        .filter((u) => {
+          const fullName = `${u.last_name || ''} ${u.first_name || ''}`.toLowerCase();
+          return (
+            fullName.includes(normalizedQuery) ||
+            u.username?.toLowerCase().includes(normalizedQuery) ||
+            u.email?.toLowerCase().includes(normalizedQuery) ||
+            u.phone?.toLowerCase().includes(normalizedQuery) ||
+            u.department_name?.toLowerCase().includes(normalizedQuery)
+          );
+        })
+        .slice(0, 5)
+    : [];
+
+  const matchedDepartments = normalizedQuery
+    ? searchData.departments
+        .filter((d) => d.name?.toLowerCase().includes(normalizedQuery))
+        .slice(0, 5)
+    : [];
+
+  const hasAnyResults =
+    matchedTasks.length > 0 || matchedUsers.length > 0 || matchedDepartments.length > 0;
 
   const unreadCount = notifications.filter((n) => !readIds.includes(n.id)).length;
   const displayedNotifications =
@@ -303,7 +378,7 @@ export default function Layout({ children }) {
       {/* Основной контент */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Верхняя панель (Header) */}
-        <header className="bg-white border-b border-gray-200 h-20 shrink-0 flex items-center px-6 shadow-sm z-30">
+        <header className="bg-white border-b border-gray-200 h-20 shrink-0 flex items-center px-6 shadow-sm z-30 gap-4">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100"
@@ -311,6 +386,23 @@ export default function Layout({ children }) {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
+          </button>
+
+          {/* КНОПКА ГЛОБАЛЬНОГО ПОИСКА (CTRL + K) */}
+          <button
+            type="button"
+            onClick={() => setShowSearchModal(true)}
+            className="flex items-center justify-between gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 px-4 py-2 rounded-xl text-sm transition-all w-full max-w-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <div className="flex items-center gap-2.5 truncate">
+              <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="truncate">{t('search.placeholder')}</span>
+            </div>
+            <kbd className="hidden sm:inline-block text-[10px] font-bold text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-md shadow-sm shrink-0">
+              {t('search.shortcut')}
+            </kbd>
           </button>
 
           <div className="ml-auto flex items-center gap-4 text-gray-600">
@@ -331,7 +423,6 @@ export default function Layout({ children }) {
                 )}
               </button>
 
-              {/* ВЫПАДАЮЩЕЕ ОКНО УВЕДОМЛЕНИЙ */}
               {showNotifications && (
                 <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                   <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -348,7 +439,6 @@ export default function Layout({ children }) {
                     )}
                   </div>
 
-                  {/* Фильтр: Все / Непрочитанные */}
                   <div className="flex gap-2 px-4 py-2 border-b border-gray-100 bg-white">
                     <button
                       onClick={() => setNotifFilter('all')}
@@ -398,7 +488,7 @@ export default function Layout({ children }) {
                                 {notif.subtitle}
                               </p>
                               <p className="text-[10px] text-gray-400 mt-1">
-                                {notif.date ? new Date(notif.date).toLocaleDateString('ru-RU') : ''}
+                                {notif.date ? new Date(notif.date).toLocaleDateString(dateLocale) : ''}
                               </p>
                             </div>
                           </div>
@@ -436,6 +526,166 @@ export default function Layout({ children }) {
           {children}
         </div>
       </main>
+
+      {/* МОДАЛЬНОЕ ОКНО ГЛОБАЛЬНОГО ПОИСКА (CTRL + K) */}
+      {showSearchModal && (
+        <div
+          className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-start justify-center pt-20 z-50 p-4"
+          onClick={() => setShowSearchModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-gray-100 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Поле ввода запроса */}
+            <div className="p-4 border-b border-gray-100 flex items-center gap-3 bg-gray-50">
+              <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('search.modal_placeholder')}
+                className="w-full bg-transparent text-gray-800 text-sm font-medium focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1"
+                >
+                  &times;
+                </button>
+              )}
+              <button
+                onClick={() => setShowSearchModal(false)}
+                className="text-[10px] font-bold text-gray-400 bg-white border border-gray-200 px-2 py-1 rounded-md hover:bg-gray-100 shrink-0"
+              >
+                {t('search.esc')}
+              </button>
+            </div>
+
+            {/* Результаты поиска */}
+            <div className="max-h-[65vh] overflow-y-auto p-4 space-y-6">
+              {!normalizedQuery ? (
+                <div className="py-10 text-center text-gray-400 text-sm">
+                  {t('search.start_typing')}
+                </div>
+              ) : !hasAnyResults ? (
+                <div className="py-10 text-center text-gray-400 text-sm">
+                  {t('search.no_results')}
+                </div>
+              ) : (
+                <>
+                  {/* 1. ЗАДАЧИ */}
+                  {matchedTasks.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
+                        {t('search.categories.tasks')} ({matchedTasks.length})
+                      </h4>
+                      <div className="space-y-1">
+                        {matchedTasks.map((task) => (
+                          <div
+                            key={`search-task-${task.id}`}
+                            onClick={() => handleSearchResultClick(`/tasks/${task.id}`)}
+                            className="p-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-4 transition-colors group"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700 truncate">
+                                  {task.title}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {task.description}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 shrink-0">
+                              {t(`tasks.status.${task.status}`)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. СОТРУДНИКИ */}
+                  {matchedUsers.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
+                        {t('search.categories.employees')} ({matchedUsers.length})
+                      </h4>
+                      <div className="space-y-1">
+                        {matchedUsers.map((emp) => (
+                          <div
+                            key={`search-emp-${emp.id}`}
+                            onClick={() => handleSearchResultClick(`/profile/${emp.id}`)}
+                            className="p-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-4 transition-colors group"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                                {emp.first_name ? emp.first_name[0] : emp.username[0]}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700 truncate">
+                                  {emp.last_name} {emp.first_name}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {emp.department_name || t('profile.not_specified')}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
+                              {emp.position && emp.position !== 'none'
+                                ? t(`profile.positions.${emp.position}`, { defaultValue: emp.position_display })
+                                : t(`profile.teaching_statuses.${emp.teaching_status}`, { defaultValue: emp.teaching_status_display || t('profile.teacher') })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. КАФЕДРЫ */}
+                  {matchedDepartments.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
+                        {t('search.categories.departments')} ({matchedDepartments.length})
+                      </h4>
+                      <div className="space-y-1">
+                        {matchedDepartments.map((dept) => (
+                          <div
+                            key={`search-dept-${dept.id}`}
+                            onClick={() => handleSearchResultClick(`/departments?dept=${dept.id}`)}
+                            className="p-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-4 transition-colors group"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                              </div>
+                              <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700 truncate">
+                                {dept.name}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

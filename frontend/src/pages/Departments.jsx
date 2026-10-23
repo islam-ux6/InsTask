@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next'; 
 
 export default function Departments() {
   const { t, i18n } = useTranslation(); 
+  const [searchParams] = useSearchParams();
+  const deptParam = searchParams.get('dept');
+
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -26,7 +29,9 @@ export default function Departments() {
         setDepartments(depsRes.data);
         setUsers(usersRes.data);
 
-        if (meRes.data.department) {
+        if (deptParam) {
+          setSelectedDeptId(Number(deptParam));
+        } else if (meRes.data.department) {
           setSelectedDeptId(meRes.data.department);
         } else if (depsRes.data.length > 0) {
           setSelectedDeptId(depsRes.data[0].id);
@@ -38,7 +43,7 @@ export default function Departments() {
       }
     };
     fetchData();
-  }, []);
+  }, [deptParam]);
 
   if (loading) return <div className="p-8 text-center text-gray-500 flex items-center justify-center h-full">{t('departments.loading')}</div>;
 
@@ -51,6 +56,80 @@ export default function Departments() {
     if (currentUser.is_rectorate || ['dean', 'deputy_dean'].includes(currentUser.position)) return true;
     if (currentUser.position === 'head_of_department' && currentUser.department === employee.department) return true;
     return false;
+  };
+
+  // ЭКСПОРТ СПИСКА СОТРУДНИКОВ КАФЕДРЫ В EXCEL (CSV С UTF-8 BOM)
+  const handleExportStaffCSV = () => {
+    if (currentDeptUsers.length === 0) return;
+
+    const escapeCSV = (val) => {
+      const str = String(val ?? '');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      t('departments.csv_headers.full_name'),
+      t('departments.csv_headers.department'),
+      t('departments.csv_headers.position'),
+      t('departments.csv_headers.degree'),
+      t('departments.csv_headers.work_status'),
+      t('departments.csv_headers.email'),
+      t('departments.csv_headers.phone'),
+      t('departments.csv_headers.hours'),
+      t('departments.csv_headers.hired')
+    ];
+
+    const rows = [headers.map(escapeCSV).join(';')];
+
+    currentDeptUsers.forEach((emp) => {
+      const roleText =
+        emp.position && emp.position !== 'none'
+          ? t(`profile.positions.${emp.position}`, { defaultValue: emp.position_display })
+          : t(`profile.teaching_statuses.${emp.teaching_status}`, {
+              defaultValue: emp.teaching_status_display || t('profile.teacher')
+            });
+
+      const degreeText =
+        emp.academic_degree && emp.academic_degree !== 'none'
+          ? t(`profile.academic_degrees.${emp.academic_degree}`, {
+              defaultValue: emp.academic_degree_display
+            })
+          : t('profile.academic_degrees.none');
+
+      const statusText = t(`profile.work_statuses.${emp.work_status}`, {
+        defaultValue: emp.work_status_display || t('departments.card.working')
+      });
+
+      const hiredText = emp.employment_date
+        ? new Date(emp.employment_date).toLocaleDateString(dateLocale)
+        : t('departments.card.none');
+
+      const row = [
+        `${emp.last_name} ${emp.first_name}`.trim(),
+        selectedDeptInfo ? selectedDeptInfo.name : emp.department_name || '',
+        roleText,
+        degreeText,
+        statusText,
+        emp.email || t('departments.card.none'),
+        emp.phone || t('departments.card.none'),
+        emp.working_hours || '',
+        hiredText
+      ];
+
+      rows.push(row.map(escapeCSV).join(';'));
+    });
+
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeDeptName = selectedDeptInfo ? selectedDeptInfo.name.replace(/\s+/g, '_') : 'department';
+    link.setAttribute('download', `staff_${safeDeptName}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -80,7 +159,7 @@ export default function Departments() {
       </div>
 
       <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">
               {selectedDeptInfo ? selectedDeptInfo.name : t('departments.select_dept')}
@@ -89,6 +168,19 @@ export default function Departments() {
               {t('departments.staff_count')} <span className="font-bold text-blue-600">{currentDeptUsers.length}</span>
             </p>
           </div>
+
+          {/* КНОПКА ВЫГРУЗКИ СОТРУДНИКОВ КАФЕДРЫ В EXCEL */}
+          {currentDeptUsers.length > 0 && (
+            <button
+              onClick={handleExportStaffCSV}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>{t('departments.export_csv')}</span>
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">

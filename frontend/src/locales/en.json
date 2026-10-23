@@ -6,6 +6,19 @@
     "profile": "My Profile",
     "logout": "Logout"
   },
+  "search": {
+    "placeholder": "Quick system search...",
+    "modal_placeholder": "Type task title, employee name, or department...",
+    "shortcut": "Ctrl + K",
+    "esc": "ESC",
+    "no_results": "No results found for your query",
+    "start_typing": "Start typing to search tasks, employees, or departments",
+    "categories": {
+      "tasks": "Tasks",
+      "employees": "Employees",
+      "departments": "Departments"
+    }
+  },
   "notifications": {
     "title": "Notifications",
     "mark_all_read": "Mark all as read",
@@ -31,6 +44,19 @@
     "staff_online": "Staff Online",
     "productivity_center": "Productivity Center",
     "personal_productivity": "Personal Productivity",
+    "export_csv": "Export Report (Excel)",
+    "csv_headers": {
+      "name": "Employee / Department",
+      "total_tasks": "Total Tasks",
+      "completed": "Completed",
+      "completion_rate": "Completion Rate (%)",
+      "quality": "Avg Quality (1-5)",
+      "discipline": "Discipline (%)",
+      "active_tasks": "Active Tasks",
+      "in_progress_h": "In Progress (h)",
+      "on_review_h": "On Review (h)",
+      "revision_h": "Revision (h)"
+    },
     "filters": {
       "departments": "Departments",
       "delays_dept": "Delays (Dept.)",
@@ -133,10 +159,31 @@
     "schedule": {
       "odd_week": "Odd Week (1)",
       "even_week": "Even Week (2)",
+      "both_weeks": "Every Week",
       "empty": "No classes scheduled for this week.",
       "type": "Type:",
       "group": "Group:",
       "room": "Room:",
+      "add_btn": "+ Add Class",
+      "delete_confirm": "Remove this class from the schedule?",
+      "modal_title": "Add Class to Schedule",
+      "week_type_label": "Week Frequency",
+      "day_label": "Day of Week",
+      "time_label": "Time Slot",
+      "subject_label": "Subject Name *",
+      "subject_placeholder": "E.g., Algorithms and Data Structures",
+      "class_type_label": "Class Type",
+      "room_label": "Room *",
+      "room_placeholder": "E.g., A-101 or Lab-2",
+      "group_label": "Student Group *",
+      "group_placeholder": "E.g., IT-21",
+      "save_btn": "Save Class",
+      "types": {
+        "lecture": "Lecture",
+        "practice": "Practice",
+        "lab": "Lab Work",
+        "seminar": "Seminar"
+      },
       "days": {
         "Понедельник": "Monday",
         "Вторник": "Tuesday",
@@ -251,7 +298,11 @@
       "desc_label": "Description *",
       "deadline_label": "Deadline *",
       "assignees_label": "Assignees (available by subordination)",
+      "smart_pick_btn": "Auto-pick optimal",
+      "smart_pick_result": "Recommended:",
+      "smart_pick_none": "No available employees with 'Working' status.",
       "active_load": "Active:",
+      "classes_load": "Classes:",
       "no_subordinates": "No available subordinates to assign",
       "target_dept_label": "Target Departments",
       "cancel": "Cancel",
@@ -324,6 +375,18 @@
     "not_found": "No departments found",
     "select_dept": "Select a department",
     "staff_count": "Staff members:",
+    "export_csv": "Export Staff (Excel)",
+    "csv_headers": {
+      "full_name": "Full Name",
+      "department": "Department",
+      "position": "Position / Status",
+      "degree": "Academic Degree",
+      "work_status": "Work Status",
+      "email": "Email",
+      "phone": "Phone",
+      "hours": "Working Hours",
+      "hired": "Hire Date"
+    },
     "card": {
       "status": "Status:",
       "email": "Email:",
