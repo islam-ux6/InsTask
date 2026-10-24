@@ -50,7 +50,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'records',
             'work_status', 'work_status_display',
             'attendance_history',
-            'schedule'
+            'schedule',
+            'avatar'
         ]
         read_only_fields = [
             'username', 'position', 'teaching_status', 'academic_degree',

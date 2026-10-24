@@ -50,6 +50,7 @@ class User(AbstractUser):
     department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
     phone = models.CharField(max_length=20, blank=True)
     employment_date = models.DateField(null=True, blank=True)
+    avatar = models.FileField(upload_to='avatars/', null=True, blank=True, verbose_name='Аватар')
 
     @property
     def is_manager(self):

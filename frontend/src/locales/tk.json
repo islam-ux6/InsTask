@@ -37,14 +37,34 @@
     "panel_institute": "Institut dolandyryş paneli",
     "panel_department": "Kafedra dolandyryş paneli",
     "panel_teacher": "Mugallym dolandyryş paneli",
-    "your_quality": "Siziň işiňiziň hili",
+    "your_quality": "Işleriň ortaça hili",
+    "quality_subtitle": "Tamamlanan tabşyryklaryň bahasy",
     "completion_rate": "Wagtynda ýerine ýetiriş",
+    "completion_subtitle": "Ýapylan tabşyryklaryň paýy",
     "lates_today": "Gijä galanlar (şu gün)",
+    "lates_subtitle": "08:30-dan soň bellenenler",
     "people": "adam",
-    "staff_online": "Ulgamdaky işgärler",
-    "productivity_center": "Öndürijilik merkezi",
-    "personal_productivity": "Şahsy öndürijilik",
+    "staff_online": "Iş ýerindäki işgärler",
+    "staff_subtitle": "Şu gün wagtynda gelenler",
+    "awaiting_review": "Barlagyňyza garaşýar",
+    "awaiting_subtitle": "«Barlagda» ýagdaýyndaky işler",
+    "my_active_kpi": "Meniň işjeň tabşyryklarym",
+    "my_active_subtitle": "Häzirki ýerine ýetirilýän işler",
+    "productivity_center": "Öndürijilik we seljerme merkezi",
+    "personal_productivity": "Şahsy öndürijilik seljermesi",
     "export_csv": "Hasabaty ýüklemek (Excel)",
+    "open_tasks_btn": "Tabşyryk tagtasyna geçmek",
+    "widgets": {
+      "attention_title_admin": "Siziň barlagyňyza we gözegçiligiňize garaşýanlar",
+      "attention_title_teacher": "Meniň ileri tutulýan tabşyryklarym",
+      "attention_empty": "Ähli tabşyryklar işlenildi! Gyssagly ýumuş ýok.",
+      "view_all": "Ähli tabşyryklar",
+      "leaderboard_title": "Öndürijilik öňdebaryjylary",
+      "leaderboard_empty": "Reýting üçin maglumat ýok",
+      "today_schedule_title": "Şu günki sapaklarym",
+      "today_schedule_empty": "Şu gün üçin tertip boýunça sapak ýok.",
+      "sunday_rest": "Şu gün ýekşenbe — dynç güni."
+    },
     "csv_headers": {
       "name": "Işgär / Kafedra",
       "total_tasks": "Jemi tabşyryklar",
@@ -72,7 +92,7 @@
       "average_quality": "Ortaça hil (1-5)",
       "task_completion": "Tabşyryklaryň ýerine ýetirilişi (%)",
       "quality": "Hil (1-5)",
-      "where_stuck": "Tabşyryklar nirede saklanýar?",
+      "where_stuck": "Tabşyryklar nirede saklanýar? (Ortaça sagat)",
       "in_progress_hours": "Işlenýär (sagat)",
       "on_review_hours": "Barlagda (sagat)",
       "revision_hours": "Kämilleşdirmede (sagat)",
@@ -107,7 +127,7 @@
     "my_profile": "Meniň profilim",
     "personnel_file": "Şahsy jilt:",
     "teacher": "Mugallym",
-    "current_status": "Häzirki ýagdaý",
+    "current_status": "Iş ýagdaýy we tertibi",
     "work_status": "Iş ýagdaýy",
     "active": "Işjeň",
     "unknown": "Näbelli",
@@ -119,12 +139,31 @@
     "email": "Email",
     "employment_date": "Işe kabul edilen senesi",
     "issue_record": "+ Sylag / Käýinç",
-    "attendance": "Gatnaşyk",
+    "attendance": "Gatnaşyk senenamasy",
     "check_in_btn": "Işe gelendigiňi bellemek",
     "checked_in_today": "Şu günki gatnaşyk bellendi",
     "on_time": "Wagtynda",
     "late": "Gijä galdy",
     "no_data": "Maglumat ýok",
+    "avatar": {
+      "upload": "Suraty üýtgetmek",
+      "remove": "Suraty pozmak"
+    },
+    "contacts_edit": {
+      "edit_btn": "Kontaktlary üýtgetmek",
+      "save_btn": "Ýatda saklamak",
+      "cancel_btn": "Goýbolsun"
+    },
+    "kpi": {
+      "completion": "Tabşyryklaryň ýerine ýetirilişi",
+      "tasks_count": "tabşyryk ýapyldy",
+      "quality": "Ortaça hil",
+      "based_on_scores": "bahalandyrylan işler boýunça",
+      "discipline": "Düzgün-nyzam indeksi",
+      "on_time_ratio": "wagtynda gelen günler",
+      "workload": "Okuw ýüki",
+      "classes_week": "hepdede sapak"
+    },
     "calendar": {
       "months": {
         "0": "Ýanwar",
@@ -195,7 +234,7 @@
     },
     "records": {
       "empty_rewards": "Häzirlikçe sylag ýok.",
-      "empty_reprimands": "Gaty gowy! Käýinç ýok.",
+      "empty_reprimands": "Düzgün-nyzam temmi ýok.",
       "issued": "Berlen senesi:",
       "author": "Awtor:"
     },
@@ -348,9 +387,22 @@
   "task_detail": {
     "loading": "Tabşyryk ýüklenýär...",
     "not_found": "Tabşyryk tapylmady",
-    "back": "Yza",
+    "back": "Tabşyryklar sanawyna dolanmak",
     "overdue": "GIJIKDIRILDI",
     "parent_task_link": "Esasy tabşyryk:",
+    "task_number": "Tabşyryk",
+    "stepper": {
+      "created": "Döredildi",
+      "in_progress": "Işlenýär",
+      "on_review": "Barlagda",
+      "completed": "Tamamlandy"
+    },
+    "metrics": {
+      "total_hours": "Sarp edilen wagt",
+      "subtasks": "Tapgyrlaryň ýerine ýetirilişi",
+      "revisions": "Kämilleşdirmäge gaýtaryldy",
+      "reports": "Hasabatlar we faýllar"
+    },
     "actions": {
       "processing": "Işlenýär...",
       "take_in_progress": "Işe başlamak",
@@ -372,41 +424,50 @@
       "badge": "Kämilleşdiriş belligi"
     },
     "subtasks": {
-      "title": "Kiçi tabşyryklar",
+      "title": "Kiçi tabşyryklar we tapgyrlar",
       "add_btn": "+ Kiçi tabşyryk goşmak",
-      "progress": "Ýerine ýetirildi",
+      "progress": "Umumy ýerine ýetiriş",
       "empty": "Häzirlikçe kiçi tabşyryk ýok. Bu işi tapgyrlara bölüp bilersiňiz.",
       "modal_title": "Kiçi tabşyryk döretmek",
       "incomplete_warning": "Ähli kiçi tabşyryklar tamamlanýança esasy tabşyrygy tamamlap bolmaýar!"
     },
     "timeline": {
-      "title": "Gijikdirme tertibi",
+      "title": "Wagt seljermesi we ýagdaýlaryň taryhy",
       "subtitle": "Her ýagdaýda geçirilen wagt (sagatda)",
       "no_data": "Ýagdaýyň üýtgemegi barada maglumat ýok...",
       "wait": "Garaşylýar",
       "in_progress": "Işlenýär",
       "review": "Barlag",
       "revision": "Kämilleşdirme",
-      "hours": "sag."
+      "hours": "sag.",
+      "history_title": "Geçişleriň hronologiýasy",
+      "active_now": "Häzirki ýagdaý"
     },
     "reports": {
-      "title": "Hasabatlar we teswirler",
-      "placeholder": "Teswir ýazyň ýa-da hasabat goşuň...",
+      "title": "Hasabatlar, faýllar we ara alyp maslahatlaşma",
+      "placeholder": "Teswir ýazyň ýa-da ýerine ýetirilen iş barada hasabat goşuň...",
       "submitting": "Iberilýär...",
-      "submit_btn": "Hasabat goýmak",
+      "submit_btn": "Hasabat ibermek",
+      "attach_btn": "Faýl goşmak",
       "download_file": "Goşulan faýly ýükläp almak",
       "employee": "Işgär",
-      "empty": "Häzirlikçe hasabat ýok"
+      "empty": "Saýlanan filtr boýunça häzirlikçe hasabat ýok",
+      "filters": {
+        "all": "Ählisi",
+        "revisions": "Bellikler",
+        "files": "Faýlly"
+      }
     },
     "info": {
-      "title": "Maglumat",
-      "deadline": "Möhleti",
-      "created_at": "Döredildi",
-      "creator": "Tabşyrykçy",
-      "revision_count": "Kämilleşdirmeler",
+      "title": "Tabşyrygyň pasporty",
+      "deadline": "Ýerine ýetirmeli möhleti",
+      "created_at": "Döredilen senesi",
+      "completed_at": "Tamamlanan senesi",
+      "creator": "Tabşyryk beriji",
+      "revision_count": "Kämilleşdirmeler sany",
       "quality": "Hil bahasy",
-      "assignees_title": "Ýerine ýetirijiler",
-      "no_assignees": "Bellenilmedik",
+      "assignees_title": "Jogapkär ýerine ýetirijiler",
+      "no_assignees": "Şahsy ýerine ýetiriji bellenilmedik",
       "target_depts": "Maksatly kafedralar"
     }
   },
